@@ -1,0 +1,35 @@
+name: stack smoke
+on:
+  push:
+    paths: ["stack/**", ".github/workflows/stack-smoke.yml"]
+  pull_request:
+    paths: ["stack/**"]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults: { run: { working-directory: stack } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: env
+        run: |
+          cp .env.example .env
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=ci$(openssl rand -hex 8)/; s/^LITELLM_MASTER_KEY=.*/LITELLM_MASTER_KEY=sk-ci$(openssl rand -hex 8)/; s/^WEBUI_SECRET_KEY=.*/WEBUI_SECRET_KEY=ci$(openssl rand -hex 8)/" .env
+          echo "OLLAMA_BASE_URL=http://ollama:11434" >> .env
+      - name: ollama (cpu) + tiny models
+        run: |
+          docker compose --profile linux up -d ollama
+          for i in $(seq 1 30); do curl -sf localhost:11434/api/tags && break; sleep 2; done
+          docker compose exec -T ollama ollama pull nomic-embed-text
+          docker compose exec -T ollama ollama pull qwen3:0.6b
+      - name: point litellm at the tiny chat model
+        run: sed -i 's#ollama_chat/qwen3:8b#ollama_chat/qwen3:0.6b#' litellm/config.yaml
+      - name: up
+        run: docker compose --profile linux up -d --build --wait --wait-timeout 600
+      - name: smoke
+        run: ./scripts/smoke.sh
+      - name: logs on failure
+        if: failure()
+        run: docker compose logs --tail=200

@@ -13,7 +13,7 @@
           ollama/*   │    openai/*   │       embeddings  │
                      ▼               ▼                   ▼
             ┌──────────────┐  ┌──────────────┐   ┌──────────────────┐
-            │ Ollama       │  │ oMLX / other │   │ rag-ingest :8080 │
+            │ Ollama       │  │ oMLX / other │   │ rag-ingest :8088 │
             │ host (Mac)   │  │ OpenAI-compat│   │ watch · chunk ·  │
             │ or container │  │ (optional)   │   │ embed · hybrid   │
             │ (Linux GPU)  │  └──────────────┘   │ search · cite    │
@@ -53,7 +53,7 @@ results carry document + page citations back into the chat.
 |---|---|---|
 | open-webui | 3000 | UI |
 | litellm | 4000 | OpenAI-compatible API + admin UI at `/ui` |
-| rag-ingest | 8080 | `/ingest`, `/search`, `/query`, `/openapi.json` |
+| rag-ingest | 8088 | `/ingest`, `/search`, `/query`, `/openapi.json` |
 | postgres | 5432 | internal only by default |
 | ollama | 11434 | host (Mac) or container (Linux) |
 

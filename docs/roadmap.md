@@ -6,9 +6,9 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Compose: Postgres, LiteLLM, Open WebUI, rag-ingest; Mac + Linux profiles
 - [x] Virtual keys, audit to Postgres, backup/restore scripts
 - [ ] `docker compose --profile llamacpp` alternative backend
-- [ ] Reverse-proxy example (Caddy) with TLS
+- [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
 - [ ] Prometheus/Grafana or Langfuse for observability
-- [ ] Smoke test in CI (compose up, hit /health on each service)
+- [x] Smoke test: `stack/scripts/smoke.sh` (health → models → embed → chat → ingest → search → cited answer → audit → spend log); CI workflow on a CPU runner with qwen3:0.6b
 
 ## 2. `rag/` — reference build with eval
 - [x] Hybrid retrieval (BM25 + vector, RRF), reranker hook, page citations

@@ -1,0 +1,15 @@
+# Reverse proxy with automatic TLS. Only the UI is public; the API and RAG service stay internal.
+#   caddy run --config Caddyfile     (or add a caddy service to compose.yaml)
+ai.example.com {
+    reverse_proxy localhost:3000
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+}
+# Expose the API only if apps outside the box need it; put it behind a separate host and rely on LiteLLM virtual keys.
+# api.example.com {
+#     reverse_proxy localhost:4000
+# }

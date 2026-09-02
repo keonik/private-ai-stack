@@ -9,7 +9,7 @@ chk() { local name=$1 url=$2; shift 2
 echo "services:"
 chk ollama    "${OLLAMA_HOST_URL:-http://localhost:11434}/api/tags"
 chk litellm   "http://localhost:${LITELLM_PORT:-4000}/health/liveliness"
-chk rag       "http://localhost:${RAG_PORT:-8080}/health"
+chk rag       "http://localhost:${RAG_PORT:-8088}/health"
 chk webui     "http://localhost:${WEBUI_PORT:-3000}/health"
 echo "models via litellm:"
 curl -sf -m 10 -H "Authorization: Bearer ${LITELLM_MASTER_KEY:-}" "http://localhost:${LITELLM_PORT:-4000}/v1/models" \

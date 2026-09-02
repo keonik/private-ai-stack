@@ -32,8 +32,8 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 | Issue a key for a user/app with a budget | `./scripts/new-key.sh alice 20 60` |
 | See who called what | LiteLLM UI at `http://localhost:4000/ui` (spend logs), or `psql` the `LiteLLM_SpendLogs` table |
 | Add a backend (MLX server, llama.cpp, a cloud model) | add a block to `litellm/config.yaml`, `docker compose restart litellm` |
-| Drop documents in | copy into `data/inbox/` — `rag-ingest` watches it; or `curl -X POST :8080/ingest` |
-| Ask with citations | `curl -X POST :8080/query -H 'content-type: application/json' -d '{"question":"..."}'` |
+| Drop documents in | copy into `data/inbox/` — `rag-ingest` watches it; or `curl -X POST :8088/ingest` |
+| Ask with citations | `curl -X POST :8088/query -H 'content-type: application/json' -d '{"question":"..."}'` |
 | Let the chat UI use retrieval | Open WebUI → Admin → Tools → add OpenAPI server `http://rag-ingest:8080` |
 | Backup / restore | `./scripts/backup.sh` → `backups/<ts>.tar.gz`; `./scripts/restore.sh backups/<ts>.tar.gz` |
 
@@ -47,7 +47,7 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 
 - [ ] `ENABLE_SIGNUP=False` after the admin exists
 - [ ] Replace the master key in Open WebUI with a per-app virtual key
-- [ ] Put :3000 behind TLS (Caddy / your tunnel); don't expose :4000 or :8080 publicly
+- [ ] Put :3000 behind TLS (Caddy / your tunnel); don't expose :4000 or :8088 publicly
 - [ ] Full-disk encryption on the host
 - [ ] Run `backup.sh` on a schedule and test `restore.sh` once
 - [ ] Read `../docs/phi-pattern.md` if the documents are regulated
@@ -63,3 +63,36 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 - **rag-ingest** is deliberately small: hybrid BM25 + vector with RRF, page-level
   citations, an OpenAPI spec so the UI can call it as a tool. The full reference
   build with reranking and an eval harness is in [`../rag/`](../rag/).
+
+## Verify
+
+```bash
+./scripts/smoke.sh      # health → models → embed → chat → ingest → search → cited answer → audit → spend log
+```
+
+`data/inbox/sample-msa.txt` is a synthetic contract so the smoke test has
+something to retrieve on a fresh install. CI runs the same script on a CPU-only
+runner with `qwen3:0.6b` (see `.github/workflows/stack-smoke.yml`).
+
+## TLS
+
+`Caddyfile.example` fronts the UI with automatic HTTPS. Keep :4000 and :8088 off
+the public interface; apps authenticate to LiteLLM with virtual keys.
+
+## Port collisions (read this on a machine that already runs things)
+
+Compose binds host ports 3000, 4000, 8088. If one is taken — an ssh `-L` forward
+or another service will do it — `docker compose up` fails for that one container
+with *"port is already allocated"*, or worse, a `localhost` listener silently
+shadows the container and health checks pass while requests go elsewhere.
+Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN`, then override in `.env`
+(`WEBUI_PORT`, `LITELLM_PORT`, `RAG_PORT`). Every script reads `.env`, so nothing
+else changes. Containers talk to each other by service name on the internal
+network and are unaffected.
+
+## Thinking models
+
+`qwen3:*` emit a reasoning block before the answer. Through LiteLLM it arrives as
+`reasoning_content`; `content` is empty if `max_tokens` is small. For
+short, deterministic replies append `/no_think` to the prompt or raise
+`max_tokens`. The RAG answer path leaves the budget open, so it is unaffected.
