@@ -1,0 +1,16 @@
+name: python check
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: compile everything
+        run: python3 -m compileall -q rag/src extract/src finetune/scripts stack/rag-ingest
+      - name: install rag + extract
+        run: |
+          (cd rag && uv venv && uv pip install -e . && .venv/bin/privrag --help >/dev/null)
+          (cd extract && uv venv && uv pip install -e . && .venv/bin/python -c "import privextract.app")
+      - name: shell syntax
+        run: for f in $(find . -name '*.sh'); do bash -n "$f"; done

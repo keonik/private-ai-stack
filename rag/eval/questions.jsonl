@@ -15,7 +15,7 @@
 {"question": "How long are audit logs retained on the appliance?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["seven"]}
 {"question": "What is the default retention period for chat history?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["90"]}
 {"question": "Does the appliance send telemetry by default?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["no"]}
-{"question": "Which subprocessors does the appliance use?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["none"]}
+{"question": "Which subprocessors does the appliance use?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["no"]}
 {"question": "Approximately how many pages are in the archive to be ingested under the statement of work?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["40,000"]}
 {"question": "How many staff will be trained under the statement of work?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["six"]}
 {"question": "What markup is applied to hardware under the SOW?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["15"]}

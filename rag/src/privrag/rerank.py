@@ -1,21 +1,33 @@
 """Reranking. Default: pointwise LLM relevance score via the chat model (works with any backend).
-Swap in a cross-encoder (bge-reranker via an OpenAI-compatible /rerank endpoint) by setting RERANK_MODEL."""
+Swap in a cross-encoder (bge-reranker via an OpenAI-compatible /rerank endpoint) by setting RERANK_MODEL.
+
+Sends think=false (a /no_think prompt suffix is NOT honored through LiteLLM's Ollama route), and still
+reads `content` or `reasoning_content` and takes the first number found, for backends that ignore the flag.
+A passage that yields no parsable score gets -1 so failures are visible, not silently tied at 0."""
 from __future__ import annotations
+import re
 import httpx
 from .config import settings
 
 _PROMPT = ("Rate how well the PASSAGE answers the QUERY on a 0-10 scale. Reply with only the number.\n\n"
-           "QUERY: {q}\n\nPASSAGE: {p} /no_think")
+           "QUERY: {q}\n\nPASSAGE: {p}")
+_NUM = re.compile(r"-?\d+(?:\.\d+)?")
+
+def _score(text: str) -> float:
+    m = _NUM.search(text or "")
+    return float(m.group()) if m else -1.0
 
 def rerank(q: str, hits: list[dict]) -> list[dict]:
     with httpx.Client(timeout=120) as c:
         for h in hits:
             r = c.post(f"{settings.base_url}/chat/completions",
                        headers={"Authorization": f"Bearer {settings.api_key}"},
-                       json={"model": settings.chat_model, "temperature": 0, "max_tokens": 4,
+                       # think=False disables Qwen3/DeepSeek-style reasoning through LiteLLM->Ollama; LiteLLM drops it for backends that lack it
+                       json={"model": settings.chat_model, "temperature": 0, "max_tokens": 16, "think": False,
                              "messages": [{"role": "user", "content": _PROMPT.format(q=q, p=h["text"][:1500])}]})
             try:
-                h["rerank"] = float(r.json()["choices"][0]["message"]["content"].strip().split()[0])
+                m = r.json()["choices"][0]["message"]
+                h["rerank"] = _score((m.get("content") or "") + " " + (m.get("reasoning_content") or ""))
             except Exception:
-                h["rerank"] = 0.0
+                h["rerank"] = -1.0
     return sorted(hits, key=lambda h: -h["rerank"])

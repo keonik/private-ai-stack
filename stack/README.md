@@ -92,7 +92,13 @@ network and are unaffected.
 
 ## Thinking models
 
-`qwen3:*` emit a reasoning block before the answer. Through LiteLLM it arrives as
-`reasoning_content`; `content` is empty if `max_tokens` is small. For
-short, deterministic replies append `/no_think` to the prompt or raise
-`max_tokens`. The RAG answer path leaves the budget open, so it is unaffected.
+`qwen3:*` (and DeepSeek-R1-style models) emit a reasoning block before the
+answer. Through LiteLLM it arrives as `reasoning_content`, and `content` is
+empty if `max_tokens` is small. Two things learned the hard way:
+
+- **`"think": false` in the request body works** end to end (LiteLLM → Ollama)
+  and returns the bare answer in a handful of tokens. Use it for scoring,
+  classification, extraction, and anything with a tight token budget.
+- **A `/no_think` suffix in the prompt does not work** through this route. It
+  looks like it should; it doesn't. The RAG answer path leaves the budget open,
+  so it is unaffected either way.

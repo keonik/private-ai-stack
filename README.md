@@ -6,10 +6,10 @@ Everything here is public, runnable with one command, and documented like a runb
 
 | Dir | What it is | Status |
 |---|---|---|
-| [`stack/`](stack/) | One-command private LLM platform: Ollama · LiteLLM · Open WebUI · RAG ingest · Postgres audit log · backups. Mac (Metal via host Ollama) and Linux (GPU container) profiles. | **runnable** |
-| [`rag/`](rag/) | Private-docs RAG reference: hybrid retrieval (BM25 + vectors), reranking, page-level citations, and an eval harness that publishes real recall/faithfulness numbers. | scaffold |
-| [`extract/`](extract/) | Structured extraction service: invoices and utility bills → schema-validated JSON with confidence scores and a human review queue. OCR via Recto. | scaffold |
-| [`finetune/`](finetune/) | LoRA fine-tune → eval → GGUF pipeline on Apple Silicon (MLX-LM), delivering models that run in Ollama/llama.cpp. | scaffold |
+| [`stack/`](stack/) | One-command private LLM platform: Ollama · LiteLLM · Open WebUI · RAG ingest · Postgres audit log · backups. Mac (Metal via host Ollama) and Linux (GPU container) profiles. | **verified** — smoke test passes end to end; backup/restore round-trip proven |
+| [`rag/`](rag/) | Private-docs RAG reference: hybrid retrieval (BM25 + vectors), reranking, page-level citations, chunk ACLs, and an eval harness that publishes real recall/MRR/citation numbers. | **verified** — eval harness run on a 5-doc corpus with distractors |
+| [`extract/`](extract/) | Structured extraction service: invoices and utility bills → schema-validated JSON with per-field confidence + evidence, cross-field rules, review queue, xlsx export. OCR via Recto. | **verified** — 9/9 fields + 3/3 line items at conf 1.0 on a synthetic invoice |
+| [`finetune/`](finetune/) | LoRA fine-tune → eval → GGUF pipeline on Apple Silicon (MLX-LM), delivering models that run in Ollama/llama.cpp. | **verified** — Qwen3-4B on invoice→JSON: exact match 0.00 → 1.00 in 11 min |
 | [`docs/`](docs/) | Architecture, the PHI/HIPAA-aware pattern, roadmap, write-ups. | — |
 
 ## Quick start

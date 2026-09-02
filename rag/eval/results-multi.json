@@ -1,0 +1,611 @@
+{
+  "n": 24,
+  "k": 4,
+  "rerank": false,
+  "recall@k": 1.0,
+  "mrr": 0.9479166666666666,
+  "citation_precision": 0.3854166666666666,
+  "answer_contains_rate": 0.9583333333333334,
+  "rows": [
+    {
+      "q": "How many days written notice is required to terminate the agreement for convenience?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "Thirty (30) days written notice is required to terminate the agreement for convenience [1].",
+      "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the cure period for a material breach before termination?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The cure period for a material breach before termination is fifteen (15) days of written notice. [1]",
+      "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the monthly service fee under the MSA?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The monthly service fee under the MSA is $600 [4].",
+      "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Which state's law governs the master services agreement?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The master services agreement is governed by the laws of the State of Washington [4].",
+      "top": [
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the initial term length of the master services agreement?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The initial term length of the Master Services Agreement is twelve (12) months [1].",
+      "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What monthly availability percentage does the SLA guarantee?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The SLA guarantees a monthly availability percentage of 99.5% [1]. This threshold is also referenced in the service credits section, where credits are applied if availability falls below this percentage [2].",
+      "top": [
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the response time for a Severity 1 incident?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The response time for a Severity 1 incident is within two (2) hours, 24x7. [1]",
+      "top": [
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What service credit applies if availability falls below 99.0%?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "If monthly availability falls below 99.0%, the service credit is 25% of that month's service fee [1].",
+      "top": [
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How much notice must the provider give before a scheduled maintenance window?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The provider must give at least seventy-two (72) hours of notice before a scheduled maintenance window [1].",
+      "top": [
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How often will the provider publish signed model updates?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The provider will publish signed model updates no less than quarterly [1].",
+      "top": [
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How long do confidentiality obligations survive after disclosure under the NDA?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The confidentiality obligations under the NDA survive for five (5) years after disclosure, and indefinitely for trade secrets [1].",
+      "top": [
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Which state's law governs the non-disclosure agreement?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The non-disclosure agreement is governed by the laws of the State of Colorado [2].",
+      "top": [
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Within how many business days must confidential information be returned or destroyed on request?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The confidential information must be returned or destroyed within ten (10) business days upon request [1].",
+      "top": [
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Who is the counterparty to the NDA with Northwind Analytics?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The counterparty to the NDA with Northwind Analytics is Alpine Ski House [1].",
+      "top": [
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How long are audit logs retained on the appliance?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "Audit logs are retained for a minimum of seven (7) years [1].",
+      "top": [
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the default retention period for chat history?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The default retention period for chat history is ninety (90) days [1].",
+      "top": [
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Does the appliance send telemetry by default?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The appliance sends no telemetry by default. Customer may opt in to sending anonymized crash reports containing no document content. [1]",
+      "top": [
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Which subprocessors does the appliance use?",
+      "recall_hit": true,
+      "answer_ok": false,
+      "answer": "The appliance uses no subprocessors. The provider operates without third-party services [1].",
+      "top": [
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Approximately how many pages are in the archive to be ingested under the statement of work?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "Approximately 40,000 pages [1].",
+      "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How many staff will be trained under the statement of work?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The Statement of Work specifies that up to six (6) staff will be trained. [1]",
+      "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What markup is applied to hardware under the SOW?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The markup applied to hardware under the SOW is 15% added to the cost. [1]",
+      "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "How many business days does the customer have to test after installation before acceptance is deemed given?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The customer has ten (10) business days after installation to test before acceptance is deemed given [1].",
+      "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "Who is responsible for scheduling and verifying backups?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The customer is responsible for scheduling and verifying backups using the provided backup tooling [1]. This responsibility is also explicitly stated in [2].",
+      "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    },
+    {
+      "q": "What is the one-time setup fee?",
+      "recall_hit": true,
+      "answer_ok": true,
+      "answer": "The one-time setup fee is $3,500 [1], [2].",
+      "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ]
+      ],
+      "rerank_scores": null
+    }
+  ]
+}

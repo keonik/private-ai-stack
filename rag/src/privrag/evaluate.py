@@ -21,7 +21,7 @@ def run(questions: Path, k: int = 6, rerank: bool = False, with_answers: bool = 
         a = answer(q["question"], hits) if with_answers else ""
         ok = all(s.lower() in a.lower() for s in q.get("answer_contains", [])) if with_answers else None
         contains += bool(ok)
-        rows.append({"q": q["question"], "recall_hit": hit, "answer_ok": ok})
+        rows.append({"q": q["question"], "recall_hit": hit, "answer_ok": ok, "answer": a[:300], "top": [(h["source"], int(h["page"])) for h in hits], "rerank_scores": [h.get("rerank") for h in hits] if rerank else None})
     out = {"n": n, "k": k, "rerank": rerank, "recall@k": recall / n, "mrr": mrr / n, "citation_precision": cit_prec / n}
     if with_answers: out["answer_contains_rate"] = contains / n
     out["rows"] = rows
