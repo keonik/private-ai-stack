@@ -12,10 +12,11 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 
 ## 2. `rag/` — reference build with eval
 - [x] Hybrid retrieval (BM25 + vector, RRF), reranker hook, page citations
-- [x] Synthetic corpus + 8-question set checked in (`rag/corpus`, `rag/eval/questions.jsonl`); multi-doc corpus in progress
+- [x] Synthetic 5-doc corpus with distractors + 24-question set checked in (`rag/corpus`, `rag/eval/questions.jsonl`)
 - [x] Eval harness run end to end (recall@k, MRR, citation precision, answer-contains); numbers in `rag/README.md`
 - [ ] Chunk-level ACL tags
 - [ ] Compare 3 embedding models on the same eval
+- [x] Rerank vs no-rerank compared on the 5-doc corpus: MRR 0.948 → 0.979, top-1 22 → 23 of 24
 
 ## 3. `extract/` — structured extraction product
 - [x] Pydantic schemas (invoice, utility bill), LLM JSON-mode extraction, validation
@@ -26,7 +27,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 ## 4. `finetune/` — LoRA → eval → GGUF
 - [x] Scripts: prepare data, train LoRA (MLX-LM), eval, fuse, convert to GGUF
 - [x] Worked example: synthetic invoice→JSON, Qwen3-4B-4bit LoRA — exact match 0.00 → 1.00, JSON valid 0.17 → 1.00, field match 0.38 → 1.00 (n=24, 11 min on M4 Max)
-- [ ] Prove the GGUF runs in Ollama (`Modelfile`)
+- [x] GGUF q8_0 (4.28 GB) exported via llama.cpp converter, loaded in Ollama, 3/3 exact on held-out invoices
 
 ## 5. Write-ups
 - [ ] "One-command private LLM stack on a Mac mini" (stack/)

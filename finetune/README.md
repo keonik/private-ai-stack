@@ -54,6 +54,27 @@ ITERS=300 BATCH=4 LR=2e-5 LAYERS=16 scripts/train_lora.sh $BASE
 python scripts/eval.py --model $BASE --adapter adapters --split data/test.jsonl --out eval/after.json --max-tokens 200
 ```
 
+## GGUF export, verified in Ollama
+
+`scripts/export_gguf.sh` fuses the adapter into a dequantized copy of the base,
+tries MLX-LM's native GGUF export, and falls back to llama.cpp's converter
+(needed for Qwen3). Output here: `fused.gguf`, **4.28 GB at q8_0**, loaded with
+`ollama create invoice-extractor -f Modelfile`, then queried through Ollama's
+API with `think: false`:
+
+| held-out invoice | Ollama (GGUF q8_0) vs label |
+|---|---|
+| Tailspin Toys #34233 | exact match |
+| Litware Consulting #46482 | exact match |
+| Fabrikam Services IN84955 (EUR) | exact match |
+
+So the model a customer receives is the model that was evaluated, in the runtime
+they already have. Gotchas hit on the way: the fuse flag is `--dequantize`
+(no hyphen); Hugging Face's cache check refuses an "incomplete snapshot" if two
+metadata files were never fetched — one `snapshot_download()` with network
+fixes it; llama.cpp's converter needs `torch`, `transformers`, `gguf`,
+`sentencepiece`.
+
 ## What the machine does overnight
 
 Training on 128 GB unified memory: 7B–14B bf16 LoRA fits comfortably; 30B in

@@ -17,3 +17,8 @@ fused/
 runs/
 .pytest_cache/
 .ruff_cache/
+finetune/llama.cpp/
+finetune/fused/
+finetune/fused.gguf
+finetune/Modelfile
+**/queue/

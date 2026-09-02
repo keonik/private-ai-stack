@@ -35,9 +35,22 @@ Measured with `privrag eval --k 4`, `local/chat` = `qwen3:8b` via Ollama, `local
 | hybrid, no rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
 | hybrid + LLM rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
 
-**Multi-document corpus** — see the next table once it lands; that one has distractor documents with overlapping vocabulary, so recall and citation precision can actually drop.
+**Multi-document corpus** — five synthetic documents (MSA, SLA, NDA, privacy policy, SOW) that share vendor names, party names, and vocabulary, 15 chunks of ~120 tokens, 24 hand-verified questions. Retrieval can and does mis-rank here.
 
-The honest way to read any RAG number: if recall@k is 1.0, your corpus is too small or your questions are too easy. Add documents until it isn't, then optimize.
+| config | n | recall@4 | MRR | top-1 correct | citation precision@4 | answer ok |
+|---|---|---|---|---|---|---|
+| hybrid, no rerank | 24 | 1.00 | 0.948 | 22/24 | 0.385 | 24/24 |
+| hybrid + LLM rerank (`think=false`) | 24 | 1.00 | **0.979** | **23/24** | 0.365 | 24/24 |
+
+How to read it:
+
+- **Recall@4 = 1.0** means the right document was always somewhere in the top 4. With 15 chunks that is a low bar; it will drop on a real corpus.
+- **MRR and top-1** are where reranking earns its keep: one more question got the right chunk in first place. That is the number that matters when the answer prompt only trusts source [1].
+- **Citation precision@4 is low by construction.** Every question has one correct source and we return four chunks, so the ceiling is 0.25 for single-source questions and 0.5 for the two dual-source ones. 0.38 means the extra chunks are mostly from the right document's neighbours. If you want this number high, return fewer chunks or measure precision@1 — which is the top-1 column.
+- **Answer ok 24/24** after fixing one over-strict label ("no subprocessors" is a correct answer to "which subprocessors"; the check wanted "none"). Before the fix the model was right and the label was wrong. Store the model's answer in the results file so you can tell those cases apart; `evaluate.py` does now.
+- **The reranker silently did nothing** in the first run: `/no_think` in the prompt is not honored via LiteLLM → Ollama, so the 16-token budget was spent thinking and no score came back. Every passage tied at -1, order unchanged, numbers identical to no-rerank. Sending `think: false` in the request fixed it. A reranker that returns identical numbers to no-rerank is a bug until proven otherwise.
+
+Wall clock on an M4 Max with `qwen3:8b`: ~80 s for the 24-question eval without rerank, ~170 s with (96 extra scoring calls).
 
 ## Design notes
 

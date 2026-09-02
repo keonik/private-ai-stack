@@ -3,9 +3,9 @@
   "k": 4,
   "rerank": true,
   "recall@k": 1.0,
-  "mrr": 0.9479166666666666,
-  "citation_precision": 0.3854166666666666,
-  "answer_contains_rate": 0.9583333333333334,
+  "mrr": 0.9791666666666666,
+  "citation_precision": 0.36458333333333326,
+  "answer_contains_rate": 1.0,
   "rows": [
     {
       "q": "How many days written notice is required to terminate the agreement for convenience?",
@@ -22,19 +22,19 @@
           1
         ],
         [
-          "sample-nda.txt",
+          "sample-sow.txt",
           1
         ],
         [
-          "sample-privacy-policy.txt",
+          "sample-sla.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        8.0,
+        7.0,
+        5.0
       ]
     },
     {
@@ -56,23 +56,27 @@
           1
         ],
         [
-          "sample-sla.txt",
+          "sample-sow.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        7.0,
+        6.0,
+        5.0,
+        3.0
       ]
     },
     {
       "q": "What is the monthly service fee under the MSA?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The monthly service fee under the MSA is $600 [4].",
+      "answer": "The monthly service fee under the MSA is $600 [1].",
       "top": [
+        [
+          "sample-msa.txt",
+          1
+        ],
         [
           "sample-sow.txt",
           1
@@ -84,24 +88,20 @@
         [
           "sample-sla.txt",
           1
-        ],
-        [
-          "sample-msa.txt",
-          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        9.0,
+        8.0,
+        5.0,
+        0.0
       ]
     },
     {
       "q": "Which state's law governs the master services agreement?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The master services agreement is governed by the laws of the State of Washington [4].",
+      "answer": "The master services agreement is governed by the laws of the State of Washington [n2].",
       "top": [
         [
           "sample-nda.txt",
@@ -116,15 +116,15 @@
           1
         ],
         [
-          "sample-msa.txt",
+          "sample-sow.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        10.0,
+        8.0,
+        7.0
       ]
     },
     {
@@ -138,30 +138,30 @@
           1
         ],
         [
-          "sample-sla.txt",
-          1
-        ],
-        [
           "sample-nda.txt",
           1
         ],
         [
           "sample-sow.txt",
           1
+        ],
+        [
+          "sample-sla.txt",
+          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        7.0,
+        7.0,
+        3.0
       ]
     },
     {
       "q": "What monthly availability percentage does the SLA guarantee?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The SLA guarantees a monthly availability percentage of 99.5% [1]. This threshold is also referenced in the service credits section, where credits are applied if availability falls below this percentage [2].",
+      "answer": "The SLA guarantees a monthly availability percentage of 99.5% [1].",
       "top": [
         [
           "sample-sla.txt",
@@ -181,17 +181,17 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        8.0,
+        0.0,
+        0.0
       ]
     },
     {
       "q": "What is the response time for a Severity 1 incident?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The response time for a Severity 1 incident is within two (2) hours, 24x7. [1]",
+      "answer": "The response time for a Severity 1 incident is within two (2) hours, 24x7 [1].",
       "top": [
         [
           "sample-sla.txt",
@@ -211,10 +211,10 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        3.0,
+        0.0,
+        0.0
       ]
     },
     {
@@ -241,10 +241,10 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        7.0,
+        0.0,
+        0.0
       ]
     },
     {
@@ -262,19 +262,19 @@
           1
         ],
         [
-          "sample-sla.txt",
+          "sample-sow.txt",
           1
         ],
         [
-          "sample-msa.txt",
+          "sample-sla.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        7.0,
+        4.0,
+        0.0
       ]
     },
     {
@@ -292,29 +292,33 @@
           1
         ],
         [
-          "sample-msa.txt",
+          "sample-privacy-policy.txt",
           1
         ],
         [
-          "sample-sla.txt",
+          "sample-sow.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        7.0,
+        5.0,
+        5.0,
+        3.0
       ]
     },
     {
       "q": "How long do confidentiality obligations survive after disclosure under the NDA?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The confidentiality obligations under the NDA survive for five (5) years after disclosure, and indefinitely for trade secrets [1].",
+      "answer": "Confidentiality obligations survive for five (5) years after disclosure, and indefinitely for trade secrets [1].",
       "top": [
         [
           "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-privacy-policy.txt",
           1
         ],
         [
@@ -324,33 +328,21 @@
         [
           "sample-msa.txt",
           1
-        ],
-        [
-          "sample-privacy-policy.txt",
-          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        9.0,
+        5.0,
+        4.0,
+        0.0
       ]
     },
     {
       "q": "Which state's law governs the non-disclosure agreement?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The non-disclosure agreement is governed by the laws of the State of Colorado [2].",
+      "answer": "The non-disclosure agreement is governed by the laws of the State of Colorado [1]. Another source also specifies Colorado for the NDA [3].",
       "top": [
-        [
-          "sample-nda.txt",
-          1
-        ],
-        [
-          "sample-nda.txt",
-          1
-        ],
         [
           "sample-nda.txt",
           1
@@ -358,43 +350,51 @@
         [
           "sample-msa.txt",
           1
+        ],
+        [
+          "sample-nda.txt",
+          1
+        ],
+        [
+          "sample-nda.txt",
+          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        10.0,
+        8.0,
+        5.0
       ]
     },
     {
       "q": "Within how many business days must confidential information be returned or destroyed on request?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The confidential information must be returned or destroyed within ten (10) business days upon request [1].",
+      "answer": "The confidential information must be returned or destroyed within ten (10) business days upon written request [1].",
       "top": [
         [
           "sample-nda.txt",
           1
         ],
         [
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
+          1
+        ],
+        [
           "sample-nda.txt",
-          1
-        ],
-        [
-          "sample-msa.txt",
-          1
-        ],
-        [
-          "sample-msa.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        8.0,
+        7.0,
+        4.0
       ]
     },
     {
@@ -408,23 +408,23 @@
           1
         ],
         [
-          "sample-privacy-policy.txt",
-          1
-        ],
-        [
           "sample-msa.txt",
           1
         ],
         [
-          "sample-privacy-policy.txt",
+          "sample-sla.txt",
+          1
+        ],
+        [
+          "sample-sow.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        8.0,
+        8.0,
+        7.0
       ]
     },
     {
@@ -451,10 +451,10 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        6.0,
+        0.0,
+        0.0
       ]
     },
     {
@@ -468,11 +468,11 @@
           1
         ],
         [
-          "sample-privacy-policy.txt",
+          "sample-msa.txt",
           1
         ],
         [
-          "sample-msa.txt",
+          "sample-privacy-policy.txt",
           1
         ],
         [
@@ -481,17 +481,17 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        9.0,
+        6.0,
+        5.0,
+        3.0
       ]
     },
     {
       "q": "Does the appliance send telemetry by default?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The appliance sends no telemetry by default. Customer may opt in to sending anonymized crash reports containing no document content. [1]",
+      "answer": "The appliance does not send telemetry by default. [1]",
       "top": [
         [
           "sample-privacy-policy.txt",
@@ -511,18 +511,22 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        0.0,
+        0.0,
+        0.0
       ]
     },
     {
       "q": "Which subprocessors does the appliance use?",
       "recall_hit": true,
-      "answer_ok": false,
-      "answer": "The appliance uses no subprocessors. The provider operates without third-party services [1].",
+      "answer_ok": true,
+      "answer": "The appliance uses no subprocessors. [1]",
       "top": [
+        [
+          "sample-privacy-policy.txt",
+          1
+        ],
         [
           "sample-privacy-policy.txt",
           1
@@ -532,19 +536,15 @@
           1
         ],
         [
-          "sample-privacy-policy.txt",
-          1
-        ],
-        [
           "sample-sla.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        10.0,
+        5.0,
+        3.0,
+        0.0
       ]
     },
     {
@@ -571,18 +571,22 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        0.0,
+        0.0,
+        0.0
       ]
     },
     {
       "q": "How many staff will be trained under the statement of work?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The Statement of Work specifies that up to six (6) staff will be trained. [1]",
+      "answer": "The statement of work specifies that up to six (6) staff will be trained. [1]",
       "top": [
+        [
+          "sample-sow.txt",
+          1
+        ],
         [
           "sample-sow.txt",
           1
@@ -594,17 +598,13 @@
         [
           "sample-sla.txt",
           1
-        ],
-        [
-          "sample-nda.txt",
-          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        6.0,
+        3.0,
+        0.0,
+        0.0
       ]
     },
     {
@@ -622,19 +622,19 @@
           1
         ],
         [
-          "sample-privacy-policy.txt",
+          "sample-sow.txt",
           1
         ],
         [
-          "sample-sow.txt",
+          "sample-sla.txt",
           1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        7.0,
+        6.0,
+        5.0,
+        3.0
       ]
     },
     {
@@ -648,11 +648,11 @@
           1
         ],
         [
-          "sample-msa.txt",
+          "sample-sow.txt",
           1
         ],
         [
-          "sample-sow.txt",
+          "sample-sla.txt",
           1
         ],
         [
@@ -661,22 +661,18 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        8.0,
+        7.0,
+        7.0,
+        5.0
       ]
     },
     {
       "q": "Who is responsible for scheduling and verifying backups?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The customer is responsible for scheduling and verifying backups using the provided backup tooling [1]. This responsibility is also explicitly stated in [2].",
+      "answer": "The Customer is responsible for scheduling and verifying backups. [1] [2]",
       "top": [
-        [
-          "sample-msa.txt",
-          1
-        ],
         [
           "sample-msa.txt",
           1
@@ -688,20 +684,24 @@
         [
           "sample-privacy-policy.txt",
           1
+        ],
+        [
+          "sample-sow.txt",
+          1
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        7.0,
+        5.0,
+        5.0,
+        5.0
       ]
     },
     {
       "q": "What is the one-time setup fee?",
       "recall_hit": true,
       "answer_ok": true,
-      "answer": "The one-time setup fee is $3,500 [1], [2].",
+      "answer": "The one-time setup fee is $3,500 [1], as stated in the Master Services Agreement (MSA) and also referenced in the Statement of Work (SOW) [2].",
       "top": [
         [
           "sample-msa.txt",
@@ -721,10 +721,10 @@
         ]
       ],
       "rerank_scores": [
-        -1.0,
-        -1.0,
-        -1.0,
-        -1.0
+        9.0,
+        8.0,
+        0.0,
+        0.0
       ]
     }
   ]
