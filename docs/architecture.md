@@ -30,10 +30,11 @@
 where keys are issued, budgets enforced, and every request written to Postgres.
 If a model backend changes, nothing upstream notices.
 
-**Backends are pluggable.** `ollama/*` is the default because it's what most
-buyers run. `openai/*` entries point at any OpenAI-compatible server — including
-an MLX server on Apple Silicon, which is meaningfully faster than Ollama on the
-same Mac. Add a line to `litellm/config.yaml`, restart LiteLLM.
+**Backends are pluggable, and that was tested.** The stack was built on Ollama,
+then switched to an oMLX server (OpenAI-compatible, MLX, on the Mac host) by
+editing `litellm/config.yaml` and recreating the router. No client changed.
+`ollama/*` stays wired as the Linux primary and Mac fallback, because Ollama is
+what most buyers run.
 
 **Mac vs Linux is a compose profile, not a fork.** On a Mac, Ollama must run on
 the host to reach Metal; containers reach it at `host.docker.internal`. On
@@ -56,6 +57,7 @@ results carry document + page citations back into the chat.
 | rag-ingest | 8088 | `/ingest`, `/search`, `/query`, `/openapi.json` |
 | postgres | 5432 | internal only by default |
 | ollama | 11434 | host (Mac) or container (Linux) |
+| oMLX | 8002 | host (Mac), key-protected; reached from containers as `host.docker.internal:8002` |
 
 ## Threat model, briefly
 

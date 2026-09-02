@@ -31,7 +31,7 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 |---|---|
 | Issue a key for a user/app with a budget | `./scripts/new-key.sh alice 20 60` |
 | See who called what | LiteLLM UI at `http://localhost:4000/ui` (spend logs), or `psql` the `LiteLLM_SpendLogs` table |
-| Add a backend (MLX server, llama.cpp, a cloud model) | add a block to `litellm/config.yaml`, `docker compose restart litellm` |
+| Add or swap a backend (MLX server, llama.cpp, a cloud model) | add a block to `litellm/config.yaml`, then `docker compose up -d litellm` |
 | Drop documents in | copy into `data/inbox/` — `rag-ingest` watches it; or `curl -X POST :8088/ingest` |
 | Ask with citations | `curl -X POST :8088/query -H 'content-type: application/json' -d '{"question":"..."}'` |
 | Let the chat UI use retrieval | Open WebUI → Admin → Tools → add OpenAPI server `http://rag-ingest:8080` |
@@ -51,6 +51,41 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 - [ ] Full-disk encryption on the host
 - [ ] Run `backup.sh` on a schedule (restore round-trip verified: wiped index + audit log + DB all came back)
 - [ ] Read `../docs/phi-pattern.md` if the documents are regulated
+
+## Backends: oMLX and Ollama, both wired
+
+`litellm/config.yaml` routes the friendly names (`local/chat`, `local/embed`, …)
+to **oMLX** — an OpenAI-compatible MLX server on the Mac host, which also serves
+vision, STT and TTS — and keeps **Ollama** under `ollama/*` as the Linux primary
+and Mac fallback. Switching the whole stack from one to the other was the edit
+of one file plus `docker compose up -d litellm`; Open WebUI, rag-ingest and the
+extraction service never changed. That is the point of the router.
+
+Measured through LiteLLM on an M4 Max, thinking off, 200 generated tokens:
+
+| friendly name | backend · model | tok/s |
+|---|---|---|
+| `local/chat-small` | oMLX · gemma4-e4b (4B-class, VLM) | 89 |
+| `ollama/chat-small` | Ollama · qwen3:4b | 127 |
+| `local/chat` | oMLX · Qwen3.8-27B-4bit | 28 |
+| `ollama/chat` | Ollama · qwen3:8b | 77 |
+
+Read carefully: these are different models, not the same model on two engines.
+The 27B is ~3× the parameters of the 8B and materially stronger on extraction
+and grounded answers; 28 tok/s for a 27B on a laptop-class chip is the headline.
+On the 4B row Ollama is faster, but it is a different architecture. A same-model
+bake-off is the honest next measurement.
+
+### Disabling "thinking" — the flag depends on the route
+
+| route | `think: false` | `chat_template_kwargs: {enable_thinking: false}` | `/no_think` in prompt |
+|---|---|---|---|
+| LiteLLM → Ollama | **works** | ignored | ignored |
+| LiteLLM → oMLX (OpenAI-compatible) | ignored | **works** | ignored |
+
+Send both. Each backend ignores the other's flag, and LiteLLM forwards both.
+The reranker in `../rag` does exactly this. Forgetting it does not error — it
+silently burns the token budget on reasoning and returns an empty answer.
 
 ## Why these pieces
 
@@ -78,6 +113,15 @@ runner with `qwen3:0.6b` (see `.github/workflows/stack-smoke.yml`).
 
 `Caddyfile.example` fronts the UI with automatic HTTPS. Keep :4000 and :8088 off
 the public interface; apps authenticate to LiteLLM with virtual keys.
+
+## `restart` does not re-read `.env`
+
+`docker compose restart <svc>` reuses the existing container and its baked-in
+environment. After changing `.env` (or anything under `environment:`), run
+`docker compose up -d <svc>` — Compose sees the diff and recreates the
+container. Symptom of getting this wrong: the config file says one thing, the
+container does another, and you chase a "Connection refused" that is really an
+old port number.
 
 ## Port collisions (read this on a machine that already runs things)
 

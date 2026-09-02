@@ -1,45 +1,63 @@
 # LiteLLM router config.
 # Friendly names on the left are what users and apps see; backends on the right.
-# Add a backend = add a block. Restart litellm. Nothing upstream changes.
+# Swapping a backend = editing this file + `docker compose restart litellm`. Nothing upstream changes.
+#
+# Two backends are wired:
+#   - oMLX  (OpenAI-compatible MLX server on the Mac host; faster than Ollama on Apple Silicon, serves
+#            chat + vision + embeddings + STT + TTS). Primary on a Mac.
+#   - Ollama (host on Mac, container on Linux). Primary on Linux; fallback on Mac.
+# Set CHAT_MODEL / EMBED_MODEL in .env to choose which friendly name the stack uses.
 
 model_list:
-  # ---- default chat + embed via Ollama (host on Mac, container on Linux) ----
+  # ---------------- oMLX (Apple Silicon primary) ----------------
   - model_name: local/chat
+    litellm_params:
+      model: openai/Qwen3.8-27B-4bit
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: local/chat-small
+    litellm_params:
+      model: openai/gemma4-e4b-mlx
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: local/chat-code
+    litellm_params:
+      model: openai/qwen3.8-27b-coder
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: local/embed
+    litellm_params:
+      model: openai/embeddinggemma-300m
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+  - model_name: local/stt
+    litellm_params:
+      model: openai/whisper-turbo
+      api_base: os.environ/OMLX_BASE_URL
+      api_key: os.environ/OMLX_API_KEY
+
+  # ---------------- Ollama (Linux primary / Mac fallback) ----------------
+  - model_name: ollama/chat
     litellm_params:
       model: ollama_chat/qwen3:8b
       api_base: os.environ/OLLAMA_BASE_URL
-  - model_name: local/chat-small
+  - model_name: ollama/chat-small
     litellm_params:
       model: ollama_chat/qwen3:4b
       api_base: os.environ/OLLAMA_BASE_URL
-  - model_name: local/embed
+  - model_name: ollama/embed
     litellm_params:
       model: ollama/nomic-embed-text
       api_base: os.environ/OLLAMA_BASE_URL
 
-  # ---- optional: MLX server on Apple Silicon (OpenAI-compatible), faster than Ollama on the same Mac ----
-  - model_name: mlx/chat
-    litellm_params:
-      model: openai/default
-      api_base: os.environ/OMLX_BASE_URL
-      api_key: os.environ/OMLX_API_KEY
-
-  # ---- optional: llama.cpp server (OpenAI-compatible) ----
-  # - model_name: llamacpp/chat
-  #   litellm_params:
-  #     model: openai/default
-  #     api_base: http://llamacpp:8081/v1
-  #     api_key: unused
-
 router_settings:
   routing_strategy: simple-shuffle
   num_retries: 2
-  timeout: 120
+  timeout: 300
 
 litellm_settings:
   drop_params: true
   set_verbose: false
-  # every request is written to Postgres (spend logs) because DATABASE_URL is set
   success_callback: []
   failure_callback: []
 
@@ -47,5 +65,3 @@ general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
   store_model_in_db: true
-  # virtual keys: create with  POST /key/generate  (see scripts/new-key.sh)
-  # budgets/rate limits are per key; nothing shares the master key in production

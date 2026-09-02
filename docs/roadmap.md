@@ -5,6 +5,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 ## 1. `stack/` — private LLM platform (runnable now)
 - [x] Compose: Postgres, LiteLLM, Open WebUI, rag-ingest; Mac + Linux profiles
 - [x] Virtual keys, audit to Postgres, backup/restore scripts
+- [x] Second backend wired and swapped live: oMLX (chat/embed/STT) alongside Ollama; router-only change
 - [ ] `docker compose --profile llamacpp` alternative backend
 - [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
 - [ ] Prometheus/Grafana or Langfuse for observability
