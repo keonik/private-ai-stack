@@ -1,0 +1,22 @@
+[project]
+name = "privrag"
+version = "0.1.0"
+description = "Private-docs RAG reference: hybrid retrieval, reranking, citations, and an eval harness."
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.28",
+  "pypdf>=5",
+  "lancedb>=0.17",
+  "pyarrow>=18",
+  "rank-bm25>=0.2",
+  "pydantic>=2",
+  "typer>=0.15",
+  "rich>=13",
+]
+[project.optional-dependencies]
+eval = ["ragas>=0.2", "datasets>=3"]
+[project.scripts]
+privrag = "privrag.cli:app"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

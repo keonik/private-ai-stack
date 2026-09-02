@@ -1,0 +1,134 @@
+# Private LLM stack — one command, audited, backed up.
+#
+#   Mac (Metal via host Ollama):   docker compose up -d
+#   Linux (GPU Ollama container):  docker compose --profile linux up -d
+#
+# Only :3000 (UI) and optionally :4000 (API) should be exposed. Put them behind TLS.
+
+name: private-ai-stack
+
+x-ollama-url: &ollama_url ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-litellm} -d ${POSTGRES_DB:-litellm}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?set LITELLM_MASTER_KEY in .env}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-${LITELLM_MASTER_KEY}}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-litellm}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-litellm}
+      STORE_MODEL_IN_DB: "True"
+      OLLAMA_BASE_URL: *ollama_url
+      OMLX_BASE_URL: ${OMLX_BASE_URL:-http://host.docker.internal:8000/v1}
+      OMLX_API_KEY: ${OMLX_API_KEY:-unused}
+      UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
+      UI_PASSWORD: ${LITELLM_UI_PASSWORD:-${LITELLM_MASTER_KEY}}
+    volumes:
+      - ./litellm/config.yaml:/app/config.yaml:ro
+    ports:
+      - "${LITELLM_PORT:-4000}:4000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:4000/health/liveliness',timeout=3).status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY in .env}
+      WEBUI_AUTH: "True"
+      ENABLE_SIGNUP: ${ENABLE_SIGNUP:-True}     # set False after the first admin exists
+      DEFAULT_USER_ROLE: pending               # admin approves new users
+      # All model traffic goes through LiteLLM so it is keyed and audited.
+      OPENAI_API_BASE_URL: http://litellm:4000/v1
+      OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
+      ENABLE_OLLAMA_API: "False"
+      # Retrieval through the rag-ingest tool server (register in Admin > Tools).
+      RAG_EMBEDDING_ENGINE: openai
+      RAG_OPENAI_API_BASE_URL: http://litellm:4000/v1
+      RAG_OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
+      RAG_EMBEDDING_MODEL: ${EMBED_MODEL:-local/embed}
+      ENABLE_COMMUNITY_SHARING: "False"
+      ENABLE_ADMIN_EXPORT: "False"
+    volumes:
+      - open_webui_data:/app/backend/data
+    ports:
+      - "${WEBUI_PORT:-3000}:8080"
+
+  rag-ingest:
+    build: ./rag-ingest
+    restart: unless-stopped
+    depends_on:
+      litellm:
+        condition: service_healthy
+    environment:
+      LITELLM_BASE_URL: http://litellm:4000/v1
+      LITELLM_API_KEY: ${LITELLM_MASTER_KEY}
+      EMBED_MODEL: ${EMBED_MODEL:-local/embed}
+      CHAT_MODEL: ${CHAT_MODEL:-local/chat}
+      INBOX_DIR: /data/inbox
+      INDEX_DIR: /data/index
+      AUDIT_LOG: /data/audit.jsonl
+      RECTO_URL: ${RECTO_URL:-}      # optional OCR endpoint for scanned PDFs
+      CHUNK_TOKENS: ${CHUNK_TOKENS:-400}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-60}
+    volumes:
+      - ./data:/data
+    ports:
+      - "${RAG_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8080/health',timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # ---- Linux only: Ollama in a container with GPU. On Mac, run Ollama on the host. ----
+  ollama:
+    profiles: ["linux"]
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  postgres_data:
+  open_webui_data:
+  ollama_data:

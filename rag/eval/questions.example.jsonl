@@ -1,0 +1,3 @@
+{"question": "What is the notice period for terminating the agreement?", "expected_sources": [{"source": "msa.pdf", "page": 7}], "answer_contains": ["30 days"]}
+{"question": "Who is responsible for data backups under the SLA?", "expected_sources": [{"source": "sla.pdf", "page": 2}], "answer_contains": ["provider"]}
+{"question": "What was the total on invoice INV-1042?", "expected_sources": [{"source": "INV-1042.pdf", "page": 1}], "answer_contains": ["1,250"]}

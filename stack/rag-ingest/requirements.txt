@@ -1,0 +1,9 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+pypdf==5.1.0
+lancedb==0.17.0
+pyarrow==18.1.0
+rank-bm25==0.2.2
+watchfiles==1.0.4
+pydantic==2.10.4

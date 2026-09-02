@@ -1,0 +1,11 @@
+[project]
+name = "privextract"
+version = "0.1.0"
+description = "Structured extraction: documents in, schema-validated JSON out, with confidence and a review queue."
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115", "uvicorn[standard]>=0.34", "httpx>=0.28", "pydantic>=2", "pypdf>=5", "openpyxl>=3.1", "python-multipart>=0.0.20"]
+[project.scripts]
+privextract = "privextract.app:main"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

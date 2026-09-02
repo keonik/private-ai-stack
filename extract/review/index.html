@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>privextract review</title>
+<style>body{font:14px system-ui;margin:2rem;max-width:1100px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:.4rem;vertical-align:top}.low{background:#fff3cd}.rule{color:#b00}input{width:100%}button{margin:.5rem 0}</style>
+<h1>Review queue</h1><p><a href="/export">Export all to Excel</a> · <a href="/docs">API</a></p><div id="q">loading…</div>
+<script>
+async function load(){const r=await fetch('/review');const docs=await r.json();const q=document.getElementById('q');q.innerHTML='';
+for(const d of docs){const box=document.createElement('div');box.innerHTML=`<h3>${d.file} <small>(${d.kind}, ${d.status})</small></h3>`+(d.issues.length?`<p class=rule>${d.issues.join(' · ')}</p>`:'');
+const t=document.createElement('table');t.innerHTML='<tr><th>field</th><th>value</th><th>conf</th><th>evidence</th></tr>';
+for(const [k,v] of Object.entries(d.data)){if(typeof v!=='object'||v===null||Array.isArray(v))continue;const tr=document.createElement('tr');if(d.review.includes(k))tr.className='low';
+tr.innerHTML=`<td>${k}</td><td><input data-k="${k}" value="${v.value??''}"></td><td>${(v.confidence??0).toFixed(2)}</td><td>${v.evidence??''}</td>`;t.appendChild(tr)}
+box.appendChild(t);const b=document.createElement('button');b.textContent='Approve';b.onclick=async()=>{const data=structuredClone(d.data);box.querySelectorAll('input').forEach(i=>{data[i.dataset.k].value=i.value||null});
+await fetch(`/review/${d.id}/approve`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});load()};box.appendChild(b);q.appendChild(box)}}
+load();
+</script>
