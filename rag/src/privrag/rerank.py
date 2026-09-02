@@ -5,7 +5,7 @@ import httpx
 from .config import settings
 
 _PROMPT = ("Rate how well the PASSAGE answers the QUERY on a 0-10 scale. Reply with only the number.\n\n"
-           "QUERY: {q}\n\nPASSAGE: {p}")
+           "QUERY: {q}\n\nPASSAGE: {p} /no_think")
 
 def rerank(q: str, hits: list[dict]) -> list[dict]:
     with httpx.Client(timeout=120) as c:

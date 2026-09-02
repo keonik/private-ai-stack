@@ -1,0 +1,10 @@
+SERVICE LEVEL AGREEMENT (SAMPLE — SYNTHETIC)
+Between Northwind Analytics LLC ("Provider") and Contoso Dental Group PC ("Customer"). This SLA supplements the Master Services Agreement.
+
+1. Availability. The document processing appliance will be available 99.5% of each calendar month, measured at the appliance's health endpoint, excluding scheduled maintenance.
+2. Scheduled Maintenance. Provider may schedule maintenance windows of up to four (4) hours per month, with at least seventy-two (72) hours notice, between 10 PM and 6 AM Pacific.
+3. Support Response. Severity 1 (service down): response within two (2) hours, 24x7. Severity 2 (degraded): response within eight (8) business hours. Severity 3 (question): response within two (2) business days.
+4. Service Credits. If monthly availability falls below 99.5%, Customer receives a credit of 10% of that month's service fee; below 99.0%, a credit of 25%. Credits are the sole remedy for availability failures.
+5. Backups. Customer is responsible for scheduling and verifying backups using the provided backup tooling. Provider will assist with restore procedures within one (1) business day of a request.
+6. Model Updates. Provider will publish signed model and software updates no less than quarterly. Customer controls when updates are applied.
+7. Reporting. Provider will deliver a monthly availability and support report by the fifth (5th) business day of the following month.

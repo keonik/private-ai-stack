@@ -1,0 +1,90 @@
+{
+  "model": "mlx-community/Qwen3-4B-4bit",
+  "adapter": "adapters",
+  "n": 24,
+  "exact_match": 1.0,
+  "json_valid": 1.0,
+  "field_match": 1.0,
+  "samples": [
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"#34233\",\"invoice_date\":\"2026-04-02\",\"due_date\":\"2026-04-17\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"#34233\",\"invoice_date\":\"2026-04-02\",\"due_date\":\"2026-04-17\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Litware Consulting\",\"invoice_number\":\"#46482\",\"invoice_date\":\"2026-01-09\",\"due_date\":\"2026-01-24\",\"currency\":\"USD\",\"subtotal\":900.0,\"tax\":92.25,\"total\":992.25}",
+      "got": "{\"vendor_name\":\"Litware Consulting\",\"invoice_number\":\"#46482\",\"invoice_date\":\"2026-01-09\",\"due_date\":\"2026-01-24\",\"currency\":\"USD\",\"subtotal\":900.0,\"tax\":92.25,\"total\":992.25}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN84955\",\"invoice_date\":\"2026-01-11\",\"due_date\":\"2026-02-25\",\"currency\":\"EUR\",\"subtotal\":7596.0,\"tax\":0.0,\"total\":7596.0}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN84955\",\"invoice_date\":\"2026-01-11\",\"due_date\":\"2026-02-25\",\"currency\":\"EUR\",\"subtotal\":7596.0,\"tax\":0.0,\"total\":7596.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Proseware Systems\",\"invoice_number\":\"IN14597\",\"invoice_date\":\"2026-04-15\",\"due_date\":\"2026-06-14\",\"currency\":\"USD\",\"subtotal\":22300.0,\"tax\":1672.5,\"total\":23972.5}",
+      "got": "{\"vendor_name\":\"Proseware Systems\",\"invoice_number\":\"IN14597\",\"invoice_date\":\"2026-04-15\",\"due_date\":\"2026-06-14\",\"currency\":\"USD\",\"subtotal\":22300.0,\"tax\":1672.5,\"total\":23972.5}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV2618\",\"invoice_date\":\"2026-04-05\",\"due_date\":\"2026-05-20\",\"currency\":\"USD\",\"subtotal\":9000.0,\"tax\":675.0,\"total\":9675.0}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV2618\",\"invoice_date\":\"2026-04-05\",\"due_date\":\"2026-05-20\",\"currency\":\"USD\",\"subtotal\":9000.0,\"tax\":675.0,\"total\":9675.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"INV-42428\",\"invoice_date\":\"2026-02-27\",\"due_date\":\"2026-03-29\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":99.0,\"total\":1299.0}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"INV-42428\",\"invoice_date\":\"2026-02-27\",\"due_date\":\"2026-03-29\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":99.0,\"total\":1299.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-77766\",\"invoice_date\":\"2026-07-01\",\"due_date\":\"2026-07-31\",\"currency\":\"CAD\",\"subtotal\":2050.0,\"tax\":153.75,\"total\":2203.75}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-77766\",\"invoice_date\":\"2026-07-01\",\"due_date\":\"2026-07-31\",\"currency\":\"CAD\",\"subtotal\":2050.0,\"tax\":153.75,\"total\":2203.75}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"IN86149\",\"invoice_date\":\"2026-02-21\",\"due_date\":\"2026-04-07\",\"currency\":\"CAD\",\"subtotal\":3500.0,\"tax\":288.75,\"total\":3788.75}",
+      "got": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"IN86149\",\"invoice_date\":\"2026-02-21\",\"due_date\":\"2026-04-07\",\"currency\":\"CAD\",\"subtotal\":3500.0,\"tax\":288.75,\"total\":3788.75}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#21472\",\"invoice_date\":\"2026-07-24\",\"due_date\":\"2026-08-08\",\"currency\":\"USD\",\"subtotal\":18150.0,\"tax\":1860.38,\"total\":20010.38}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#21472\",\"invoice_date\":\"2026-07-24\",\"due_date\":\"2026-08-08\",\"currency\":\"USD\",\"subtotal\":18150.0,\"tax\":1860.38,\"total\":20010.38}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN36051\",\"invoice_date\":\"2026-07-22\",\"due_date\":\"2026-08-21\",\"currency\":\"USD\",\"subtotal\":7197.0,\"tax\":539.77,\"total\":7736.77}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN36051\",\"invoice_date\":\"2026-07-22\",\"due_date\":\"2026-08-21\",\"currency\":\"USD\",\"subtotal\":7197.0,\"tax\":539.77,\"total\":7736.77}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"IN35264\",\"invoice_date\":\"2026-01-27\",\"due_date\":\"2026-03-28\",\"currency\":\"USD\",\"subtotal\":4300.0,\"tax\":322.5,\"total\":4622.5}",
+      "got": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"IN35264\",\"invoice_date\":\"2026-01-27\",\"due_date\":\"2026-03-28\",\"currency\":\"USD\",\"subtotal\":4300.0,\"tax\":322.5,\"total\":4622.5}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV9619\",\"invoice_date\":\"2026-06-07\",\"due_date\":\"2026-08-06\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}",
+      "got": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV9619\",\"invoice_date\":\"2026-06-07\",\"due_date\":\"2026-08-06\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"IN17661\",\"invoice_date\":\"2026-04-24\",\"due_date\":\"2026-06-23\",\"currency\":\"EUR\",\"subtotal\":7000.0,\"tax\":577.5,\"total\":7577.5}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"IN17661\",\"invoice_date\":\"2026-04-24\",\"due_date\":\"2026-06-23\",\"currency\":\"EUR\",\"subtotal\":7000.0,\"tax\":577.5,\"total\":7577.5}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-8179\",\"invoice_date\":\"2026-07-27\",\"due_date\":\"2026-09-25\",\"currency\":\"USD\",\"subtotal\":3000.0,\"tax\":225.0,\"total\":3225.0}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-8179\",\"invoice_date\":\"2026-07-27\",\"due_date\":\"2026-09-25\",\"currency\":\"USD\",\"subtotal\":3000.0,\"tax\":225.0,\"total\":3225.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#83394\",\"invoice_date\":\"2026-08-15\",\"due_date\":\"2026-09-14\",\"currency\":\"USD\",\"subtotal\":150.0,\"tax\":0.0,\"total\":150.0}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#83394\",\"invoice_date\":\"2026-08-15\",\"due_date\":\"2026-09-14\",\"currency\":\"USD\",\"subtotal\":150.0,\"tax\":0.0,\"total\":150.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV-32506\",\"invoice_date\":\"2026-06-23\",\"due_date\":\"2026-08-07\",\"currency\":\"USD\",\"subtotal\":10050.0,\"tax\":753.75,\"total\":10803.75}",
+      "got": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV-32506\",\"invoice_date\":\"2026-06-23\",\"due_date\":\"2026-08-07\",\"currency\":\"USD\",\"subtotal\":10050.0,\"tax\":753.75,\"total\":10803.75}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#58669\",\"invoice_date\":\"2026-01-17\",\"due_date\":\"2026-03-03\",\"currency\":\"USD\",\"subtotal\":23200.0,\"tax\":1740.0,\"total\":24940.0}",
+      "got": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#58669\",\"invoice_date\":\"2026-01-17\",\"due_date\":\"2026-03-03\",\"currency\":\"USD\",\"subtotal\":23200.0,\"tax\":1740.0,\"total\":24940.0}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"INV46992\",\"invoice_date\":\"2026-05-06\",\"due_date\":\"2026-06-05\",\"currency\":\"USD\",\"subtotal\":14595.0,\"tax\":1495.99,\"total\":16090.99}",
+      "got": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"INV46992\",\"invoice_date\":\"2026-05-06\",\"due_date\":\"2026-06-05\",\"currency\":\"USD\",\"subtotal\":14595.0,\"tax\":1495.99,\"total\":16090.99}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Coho Vineyard\",\"invoice_number\":\"INV-91709\",\"invoice_date\":\"2026-03-17\",\"due_date\":\"2026-04-01\",\"currency\":\"USD\",\"subtotal\":1550.0,\"tax\":116.25,\"total\":1666.25}",
+      "got": "{\"vendor_name\":\"Coho Vineyard\",\"invoice_number\":\"INV-91709\",\"invoice_date\":\"2026-03-17\",\"due_date\":\"2026-04-01\",\"currency\":\"USD\",\"subtotal\":1550.0,\"tax\":116.25,\"total\":1666.25}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV89822\",\"invoice_date\":\"2026-07-15\",\"due_date\":\"2026-08-14\",\"currency\":\"CAD\",\"subtotal\":30100.0,\"tax\":2257.5,\"total\":32357.5}",
+      "got": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV89822\",\"invoice_date\":\"2026-07-15\",\"due_date\":\"2026-08-14\",\"currency\":\"CAD\",\"subtotal\":30100.0,\"tax\":2257.5,\"total\":32357.5}"
+    }
+  ]
+}

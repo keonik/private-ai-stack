@@ -8,6 +8,10 @@ question set.
 The deployable lite version of this lives in `../stack/rag-ingest`. This is the
 version you measure and iterate on.
 
+## Corpus
+
+`corpus/` holds five synthetic documents (MSA, SLA, NDA, privacy policy, SOW) that share vendor names and vocabulary so retrieval has real distractors. Never put customer data here. Add your own public docs and extend `eval/questions.jsonl` with hand-verified answers.
+
 ## Run
 
 ```bash

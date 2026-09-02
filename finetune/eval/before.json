@@ -1,0 +1,90 @@
+{
+  "model": "mlx-community/Qwen3-4B-4bit",
+  "adapter": null,
+  "n": 24,
+  "exact_match": 0.0,
+  "json_valid": 0.16666666666666666,
+  "field_match": 0.375,
+  "samples": [
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"#34233\",\"invoice_date\":\"2026-04-02\",\"due_date\":\"2026-04-17\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}",
+      "got": "{\n  \"invoice_number\": \"34233\",\n  \"from_company\": \"Tailspin Toys\",\n  \"from_address\": \"7030 5th Ave, Portland, OR\",\n  \"to_company\": \"Woodgrove Bank\",\n  \"date\": \"2026-04-02\",\n  \"due_date\": \"2026-04-17\",\n  \"currency\": \"USD\",\n  \"items\": [\n    {\n      \"description\": \"Data migration\",\n      \"quantity\": 1,\n      \"unit_price\": 1200.00,\n      \"total_price\": 1200.00\n    }\n  ],\n  \"subtotal\": 1200.00,\n  \"tax_rate\": 5,\n  \"tax_amount\": 60.00,\n  \"total_amount_due\": 1260.00\n}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Litware Consulting\",\"invoice_number\":\"#46482\",\"invoice_date\":\"2026-01-09\",\"due_date\":\"2026-01-24\",\"currency\":\"USD\",\"subtotal\":900.0,\"tax\":92.25,\"total\":992.25}",
+      "got": "{\n  \"company\": \"Litware Consulting\",\n  \"address\": \"3204 5th Ave, Portland, OR\",\n  \"client\": \"Lucerne Publishing\",\n  \"invoice_number\": \"46482\",\n  \"issue_date\": \"2026-01-09\",\n  \"due_date\": \"2026-01-24\",\n  \"currency\": \"USD\",\n  \"consulting_hours\": 6,\n  \"consulting_rate\": 150.00,\n  \"consulting_total\": 900.00,\n  \"net_amount\": 900.00,\n  \"vat_rate\": 10.25,\n  \"vat_amount\": 92.25,\n  \"gross_total\": 992.25,\n  \"terms\": \"15 days\"\n}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN84955\",\"invoice_date\":\"2026-01-11\",\"due_date\":\"2026-02-25\",\"currency\":\"EUR\",\"subtotal\":7596.0,\"tax\":0.0,\"total\":7596.0}",
+      "got": "{\n  \"invoice_number\": \"IN84955\",\n  \"from\": \"Fabrikam Services Inc, 5943 Main St, Austin, TX\",\n  \"to\": \"Alpine Ski House\",\n  \"date\": \"2026-01-11\",\n  \"due_date\": \"2026-02-25\",\n  \"currency\": \"EUR\",\n  \"items\": [\n    {\n      \"description\": \"Data migration                       1\",\n      \"quantity\": \"1\",\n      \"unit_price\": \"1,200.00\",\n      \"total_price\": \"1,200.00\"\n    },\n    {\n      \"description\": \"Data migration                       2\",\n      \"quantity\": \"1\",\n      \"unit_price\": \"1,200.00\",\n      \"total_price\": \"2,400.00\"\n    },\n    {\n      \""
+    },
+    {
+      "want": "{\"vendor_name\":\"Proseware Systems\",\"invoice_number\":\"IN14597\",\"invoice_date\":\"2026-04-15\",\"due_date\":\"2026-06-14\",\"currency\":\"USD\",\"subtotal\":22300.0,\"tax\":1672.5,\"total\":23972.5}",
+      "got": "{\n  \"company\": \"Proseware Systems\",\n  \"address\": \"6916 Harbor Ave, Denver, CO\",\n  \"client\": \"Contoso Dental Group PC\",\n  \"invoice_number\": \"IN14597\",\n  \"issue_date\": \"2026-04-15\",\n  \"due_date\": \"2026-06-14\",\n  \"currency\": \"USD\",\n  \"services\": [\n    {\n      \"service\": \"Support retainer\",\n      \"quantity\": 6,\n      \"unit_price\": 400.00,\n      \"total\": 2400.00\n    },\n    {\n      \"service\": \"Appliance setup\",\n      \"quantity\": 5,\n      \"unit_price\": 3500.00,\n      \"total\": 17500.00\n    },\n    {\n      \"service\": \"Data migration"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV2618\",\"invoice_date\":\"2026-04-05\",\"due_date\":\"2026-05-20\",\"currency\":\"USD\",\"subtotal\":9000.0,\"tax\":675.0,\"total\":9675.0}",
+      "got": "{\n  \"company\": \"Tailspin Toys\",\n  \"address\": \"5019 Harbor Ave, Austin, TX\",\n  \"invoice\": {\n    \"number\": \"INV2618\",\n    \"date\": \"2026-04-05\",\n    \"due_date\": \"2026-05-20\",\n    \"currency\": \"USD\",\n    \"terms\": \"Net 45\",\n    \"total_due\": 9675.00\n  },\n  \"bill_to\": {\n    \"name\": \"Alpine Ski House\",\n    \"services\": [\n      {\n        \"name\": \"Data migration\",\n        \"quantity\": 5,\n        \"unit_price\": 1200.00,\n        \"total\": 6000.00\n      },\n      {\n        \"name\": \"Monthly service fee\",\n        \"quantity\": 5,\n        \"unit_price\": 6"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"INV-42428\",\"invoice_date\":\"2026-02-27\",\"due_date\":\"2026-03-29\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":99.0,\"total\":1299.0}",
+      "got": "{\n  \"company\": \"Fabrikam Services Inc\",\n  \"address\": \"3307 Harbor Ave, Denver, CO\",\n  \"invoice\": {\n    \"number\": \"INV-42428\",\n    \"date\": \"2026-02-27\",\n    \"due_date\": \"2026-03-29\",\n    \"currency\": \"USD\",\n    \"payment_terms\": \"Net 30\"\n  },\n  \"bill_to\": \"Trey Research\",\n  \"services\": [\n    {\n      \"name\": \"Support retainer\",\n      \"quantity\": 3,\n      \"unit_price\": 400.00,\n      \"total\": 1200.00\n    }\n  ],\n  \"totals\": {\n    \"sub_total\": 1200.00,\n    \"tax\": 99.00,\n    \"total_due\": 12"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-77766\",\"invoice_date\":\"2026-07-01\",\"due_date\":\"2026-07-31\",\"currency\":\"CAD\",\"subtotal\":2050.0,\"tax\":153.75,\"total\":2203.75}",
+      "got": "{\n  \"invoice_number\": \"INV-77766\",\n  \"from\": \"Tailspin Toys, 3641 Main St, Seattle, WA\",\n  \"to\": \"Alpine Ski House\",\n  \"date\": \"2026-07-01\",\n  \"due_date\": \"2026-07-31\",\n  \"currency\": \"CAD\",\n  \"items\": [\n    {\n      \"description\": \"On-site training (hours)\",\n      \"hours\": 3,\n      \"rate\": 150.00,\n      \"total\": 450.00\n    },\n    {\n      \"description\": \"Support retainer\",\n      \"hours\": 4,\n      \"rate\": 400.00,\n      \"total\": 1600.00\n    }\n  ],\n  \"subtotal\": 2050.00,\n  \"tax"
+    },
+    {
+      "want": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"IN86149\",\"invoice_date\":\"2026-02-21\",\"due_date\":\"2026-04-07\",\"currency\":\"CAD\",\"subtotal\":3500.0,\"tax\":288.75,\"total\":3788.75}",
+      "got": "{\n  \"company\": \"Adventure Works Supply\",\n  \"address\": \"7444 Main St, Seattle, WA\",\n  \"invoice\": {\n    \"number\": \"IN86149\",\n    \"date\": \"2026-02-21\",\n    \"due_date\": \"2026-04-07\",\n    \"currency\": \"CAD\",\n    \"terms\": \"Net 45\",\n    \"bill_to\": {\n      \"name\": \"Alpine Ski House\",\n      \"items\": [\n        {\n          \"description\": \"Appliance setup\",\n          \"quantity\": 1,\n          \"unit_price\": 3500.00,\n          \"total\": 3500.00\n        }\n      ],\n      \"sub_total\": 3500.00,\n      \"tax\": {\n        \"rate\": 8.25,\n        \"amount\": 288"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#21472\",\"invoice_date\":\"2026-07-24\",\"due_date\":\"2026-08-08\",\"currency\":\"USD\",\"subtotal\":18150.0,\"tax\":1860.38,\"total\":20010.38}",
+      "got": "{\n  \"invoice_number\": \"21472\",\n  \"from_company\": \"Fabrikam Services Inc\",\n  \"from_address\": \"7225 Main St, Seattle, WA\",\n  \"to_company\": \"Trey Research\",\n  \"date\": \"2026-07-24\",\n  \"due_date\": \"2026-08-08\",\n  \"currency\": \"USD\",\n  \"services\": [\n    {\n      \"service_name\": \"Monthly service fee\",\n      \"quantity\": 5,\n      \"unit_price\": 600.00,\n      \"total_price\": 3000.00\n    },\n    {\n      \"service_name\": \"On-site training (hours)\",\n      \"quantity\": 5,\n      \"unit_price\": 150.00,\n      \"total_price\": 750.00\n    },\n    {\n      \"service_name"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"IN36051\",\"invoice_date\":\"2026-07-22\",\"due_date\":\"2026-08-21\",\"currency\":\"USD\",\"subtotal\":7197.0,\"tax\":539.77,\"total\":7736.77}",
+      "got": "{\n  \"invoice_number\": \"IN36051\",\n  \"from_company\": \"Fabrikam Services Inc\",\n  \"from_address\": \"7956 5th Ave, Austin, TX\",\n  \"to_company\": \"Trey Research\",\n  \"date\": \"2026-07-22\",\n  \"due_date\": \"2026-08-21\",\n  \"currency\": \"USD\",\n  \"services\": [\n    {\n      \"service_name\": \"Monthly service fee\",\n      \"quantity\": 4,\n      \"unit_price\": 600.00,\n      \"total\": 2400.00\n    },\n    {\n      \"service_name\": \"Consulting hours\",\n      \"quantity\": 6,\n      \"unit_price\": 150.00,\n      \"total\": 900.00\n    },\n    {\n      \"service_name\":"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"IN35264\",\"invoice_date\":\"2026-01-27\",\"due_date\":\"2026-03-28\",\"currency\":\"USD\",\"subtotal\":4300.0,\"tax\":322.5,\"total\":4622.5}",
+      "got": "{\n  \"company\": \"Northwind Analytics LLC\",\n  \"address\": \"7716 5th Ave, Denver, CO\",\n  \"invoice\": {\n    \"number\": \"IN35264\",\n    \"date\": \"2026-01-27\",\n    \"due_date\": \"2026-03-28\",\n    \"currency\": \"USD\",\n    \"terms\": \"Net 60\"\n  },\n  \"bill_to\": \"Contoso Dental Group PC\",\n  \"items\": [\n    {\n      \"description\": \"On-site training (hours)\",\n      \"quantity\": 6,\n      \"unit_price\": 150.00,\n      \"total\": 900.00\n    },\n    {\n      \"description\": \"Annual license\",\n      \"quantity\": 1,\n      \"unit_price\": 2400.00,\n      \"total\": 24"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV9619\",\"invoice_date\":\"2026-06-07\",\"due_date\":\"2026-08-06\",\"currency\":\"USD\",\"subtotal\":1200.0,\"tax\":60.0,\"total\":1260.0}",
+      "got": "{\n  \"company\": \"Northwind Analytics LLC\",\n  \"address\": \"3428 Harbor Ave, Seattle, WA\",\n  \"invoice\": {\n    \"number\": \"INV9619\",\n    \"date\": \"2026-06-07\",\n    \"due_date\": \"2026-08-06\",\n    \"currency\": \"USD\",\n    \"terms\": \"Net 60\"\n  },\n  \"bill_to\": {\n    \"name\": \"Humongous Insurance\",\n    \"service\": \"Data migration\",\n    \"quantity\": 1,\n    \"unit_price\": 1200.00,\n    \"total_price\": 1200.00\n  },\n  \"subtotal\": 1200.00,\n  \"tax\": 60.00,\n  \"total_due\": 1260.00\n}"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"IN17661\",\"invoice_date\":\"2026-04-24\",\"due_date\":\"2026-06-23\",\"currency\":\"EUR\",\"subtotal\":7000.0,\"tax\":577.5,\"total\":7577.5}",
+      "got": "{\n  \"company\": \"Tailspin Toys\",\n  \"address\": \"9445 Pine St, Portland, OR\",\n  \"bank\": \"Woodgrove Bank\",\n  \"invoice_number\": \"IN17661\",\n  \"issue_date\": \"2026-04-24\",\n  \"due_date\": \"2026-06-23\",\n  \"currency\": \"EUR\",\n  \"items\": [\n    {\n      \"description\": \"Appliance setup\",\n      \"quantity\": 1,\n      \"unit_price\": 3500.00,\n      \"total\": 3500.00\n    },\n    {\n      \"description\": \"Appliance setup\",\n      \"quantity\": 1,\n      \"unit_price\": 3500.00,\n      \"total\": 3500.00\n    }\n  ],\n  \"net_amount\": 700"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV-8179\",\"invoice_date\":\"2026-07-27\",\"due_date\":\"2026-09-25\",\"currency\":\"USD\",\"subtotal\":3000.0,\"tax\":225.0,\"total\":3225.0}",
+      "got": "{\n  \"company\": \"Tailspin Toys\",\n  \"address\": \"8590 Harbor Ave, Portland, OR\",\n  \"invoice\": {\n    \"number\": \"INV-8179\",\n    \"date\": \"2026-07-27\",\n    \"due_date\": \"2026-09-25\",\n    \"currency\": \"USD\",\n    \"terms\": \"Net 60\"\n  },\n  \"bill_to\": {\n    \"name\": \"Humongous Insurance\",\n    \"services\": [\n      {\n        \"name\": \"Data migration\",\n        \"quantity\": 1,\n        \"unit_price\": 1200.00,\n        \"total\": 1200.00\n      },\n      {\n        \"name\": \"Monthly service fee\",\n        \"quantity\": 3,\n        \"unit_price\": 600.00,\n        \"total\": 18"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#83394\",\"invoice_date\":\"2026-08-15\",\"due_date\":\"2026-09-14\",\"currency\":\"USD\",\"subtotal\":150.0,\"tax\":0.0,\"total\":150.0}",
+      "got": "{\n  \"company\": \"Fabrikam Services Inc\",\n  \"address\": \"1405 5th Ave, Denver, CO\",\n  \"invoice\": {\n    \"number\": \"83394\",\n    \"date\": \"2026-08-15\",\n    \"due_date\": \"2026-09-14\",\n    \"currency\": \"USD\"\n  },\n  \"bill_to\": \"Humongous Insurance\",\n  \"services\": [\n    {\n      \"name\": \"Consulting hours\",\n      \"hours\": 1,\n      \"rate\": 150.00,\n      \"total\": 150.00\n    }\n  ],\n  \"totals\": {\n    \"sub_total\": 150.00,\n    \"tax\": 0.00,\n    \"total_due\": 150.00\n  },\n  \"payment_terms\": \"Net"
+    },
+    {
+      "want": "{\"vendor_name\":\"Northwind Analytics LLC\",\"invoice_number\":\"INV-32506\",\"invoice_date\":\"2026-06-23\",\"due_date\":\"2026-08-07\",\"currency\":\"USD\",\"subtotal\":10050.0,\"tax\":753.75,\"total\":10803.75}",
+      "got": "{\n  \"company\": \"Northwind Analytics LLC\",\n  \"address\": \"7016 Harbor Ave, Denver, CO\",\n  \"invoice\": {\n    \"number\": \"INV-32506\",\n    \"date\": \"2026-06-23\",\n    \"due_date\": \"2026-08-07\",\n    \"currency\": \"USD\",\n    \"terms\": \"Net 45\",\n    \"bill_to\": \"Woodgrove Bank\"\n  },\n  \"services\": [\n    {\n      \"name\": \"Data migration\",\n      \"quantity\": 5,\n      \"unit_price\": 1200.00,\n      \"total\": 6000.00\n    },\n    {\n      \"name\": \"Consulting hours\",\n      \"quantity\": 3,\n      \"unit_price\": 150.00,\n      \"total\": 450.0"
+    },
+    {
+      "want": "{\"vendor_name\":\"Fabrikam Services Inc\",\"invoice_number\":\"#58669\",\"invoice_date\":\"2026-01-17\",\"due_date\":\"2026-03-03\",\"currency\":\"USD\",\"subtotal\":23200.0,\"tax\":1740.0,\"total\":24940.0}",
+      "got": "{\n  \"vendor\": \"Fabrikam Services Inc\",\n  \"address\": \"5874 Pine St, Portland, OR\",\n  \"client\": \"Lucerne Publishing\",\n  \"invoice_number\": \"58669\",\n  \"issue_date\": \"2026-01-17\",\n  \"due_date\": \"2026-03-03\",\n  \"currency\": \"USD\",\n  \"services\": [\n    {\n      \"service_name\": \"Support retainer\",\n      \"hours\": 6,\n      \"rate\": 400.00,\n      \"total\": 2400.00\n    },\n    {\n      \"service_name\": \"Appliance setup\",\n      \"hours\": 5,\n      \"rate\": 3500.00,\n      \"total\": 17500.00\n    },\n    {\n      \"service_name\": \"On-site training"
+    },
+    {
+      "want": "{\"vendor_name\":\"Adventure Works Supply\",\"invoice_number\":\"INV46992\",\"invoice_date\":\"2026-05-06\",\"due_date\":\"2026-06-05\",\"currency\":\"USD\",\"subtotal\":14595.0,\"tax\":1495.99,\"total\":16090.99}",
+      "got": "{\n  \"invoice_number\": \"INV46992\",\n  \"from\": \"Adventure Works Supply, 8390 Pine St, Denver, CO\",\n  \"to\": \"Alpine Ski House\",\n  \"date\": \"2026-05-06\",\n  \"due_date\": \"2026-06-05\",\n  \"currency\": \"USD\",\n  \"items\": [\n    {\n      \"description\": \"Annual license\",\n      \"quantity\": 2,\n      \"unit_price\": 2400.00,\n      \"total_price\": 4800.00\n    },\n    {\n      \"description\": \"Hardware: Mac mini 24GB\",\n      \"quantity\": 5,\n      \"unit_price\": 999.00,\n      \"total_price\": 4995.00\n    },\n    {\n      \"description\": \"Annual license\","
+    },
+    {
+      "want": "{\"vendor_name\":\"Coho Vineyard\",\"invoice_number\":\"INV-91709\",\"invoice_date\":\"2026-03-17\",\"due_date\":\"2026-04-01\",\"currency\":\"USD\",\"subtotal\":1550.0,\"tax\":116.25,\"total\":1666.25}",
+      "got": "{\n  \"business_name\": \"Coho Vineyard\",\n  \"address\": \"1591 Main St, Denver, CO\",\n  \"client_name\": \"Humongous Insurance\",\n  \"invoice_number\": \"INV-91709\",\n  \"issue_date\": \"2026-03-17\",\n  \"due_date\": \"2026-04-01\",\n  \"currency\": \"USD\",\n  \"services\": [\n    {\n      \"service_name\": \"Support retainer\",\n      \"hours\": 2,\n      \"rate\": 400.00,\n      \"total\": 800.00\n    },\n    {\n      \"service_name\": \"Consulting hours\",\n      \"hours\": 5,\n      \"rate\": 150.00,\n      \"total\": 750.00\n    }\n  ],\n  \"net_amount\": 155"
+    },
+    {
+      "want": "{\"vendor_name\":\"Tailspin Toys\",\"invoice_number\":\"INV89822\",\"invoice_date\":\"2026-07-15\",\"due_date\":\"2026-08-14\",\"currency\":\"CAD\",\"subtotal\":30100.0,\"tax\":2257.5,\"total\":32357.5}",
+      "got": "{\n  \"company\": \"Tailspin Toys\",\n  \"address\": \"3915 5th Ave, Denver, CO\",\n  \"invoice\": {\n    \"number\": \"INV89822\",\n    \"date\": \"2026-07-15\",\n    \"due_date\": \"2026-08-14\",\n    \"currency\": \"CAD\",\n    \"bill_to\": \"Woodgrove Bank\",\n    \"items\": [\n      {\n        \"description\": \"Consulting hours\",\n        \"quantity\": 4,\n        \"unit_price\": 150.00,\n        \"total\": 600.00\n      },\n      {\n        \"description\": \"Annual license\",\n        \"quantity\": 5,\n        \"unit_price\": 2400.00,\n        \"total\": 12000.00\n      },\n      {\n        \"description\": \""
+    }
+  ]
+}

@@ -1,8 +1,24 @@
 {"question": "How many days written notice is required to terminate the agreement for convenience?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["30"]}
 {"question": "What is the cure period for a material breach before termination?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["15"]}
-{"question": "What is the monthly service fee?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["600"]}
-{"question": "Who is responsible for scheduling and verifying backups?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["Customer"]}
-{"question": "Which state's law governs the agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["Washington"]}
-{"question": "Is customer data transmitted to the provider's systems?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["no"]}
-{"question": "What is the one-time setup fee?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["3,500"]}
-{"question": "What is the initial term length of the agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["twelve"]}
+{"question": "What is the monthly service fee under the MSA?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["600"]}
+{"question": "Which state's law governs the master services agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["Washington"]}
+{"question": "What is the initial term length of the master services agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["twelve"]}
+{"question": "What monthly availability percentage does the SLA guarantee?", "expected_sources": [{"source": "sample-sla.txt", "page": 1}], "answer_contains": ["99.5"]}
+{"question": "What is the response time for a Severity 1 incident?", "expected_sources": [{"source": "sample-sla.txt", "page": 1}], "answer_contains": ["2"]}
+{"question": "What service credit applies if availability falls below 99.0%?", "expected_sources": [{"source": "sample-sla.txt", "page": 1}], "answer_contains": ["25"]}
+{"question": "How much notice must the provider give before a scheduled maintenance window?", "expected_sources": [{"source": "sample-sla.txt", "page": 1}], "answer_contains": ["72"]}
+{"question": "How often will the provider publish signed model updates?", "expected_sources": [{"source": "sample-sla.txt", "page": 1}], "answer_contains": ["quarter"]}
+{"question": "How long do confidentiality obligations survive after disclosure under the NDA?", "expected_sources": [{"source": "sample-nda.txt", "page": 1}], "answer_contains": ["five"]}
+{"question": "Which state's law governs the non-disclosure agreement?", "expected_sources": [{"source": "sample-nda.txt", "page": 1}], "answer_contains": ["Colorado"]}
+{"question": "Within how many business days must confidential information be returned or destroyed on request?", "expected_sources": [{"source": "sample-nda.txt", "page": 1}], "answer_contains": ["10"]}
+{"question": "Who is the counterparty to the NDA with Northwind Analytics?", "expected_sources": [{"source": "sample-nda.txt", "page": 1}], "answer_contains": ["Alpine"]}
+{"question": "How long are audit logs retained on the appliance?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["seven"]}
+{"question": "What is the default retention period for chat history?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["90"]}
+{"question": "Does the appliance send telemetry by default?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["no"]}
+{"question": "Which subprocessors does the appliance use?", "expected_sources": [{"source": "sample-privacy-policy.txt", "page": 1}], "answer_contains": ["none"]}
+{"question": "Approximately how many pages are in the archive to be ingested under the statement of work?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["40,000"]}
+{"question": "How many staff will be trained under the statement of work?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["six"]}
+{"question": "What markup is applied to hardware under the SOW?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["15"]}
+{"question": "How many business days does the customer have to test after installation before acceptance is deemed given?", "expected_sources": [{"source": "sample-sow.txt", "page": 1}], "answer_contains": ["10"]}
+{"question": "Who is responsible for scheduling and verifying backups?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}, {"source": "sample-sla.txt", "page": 1}], "answer_contains": ["Customer"]}
+{"question": "What is the one-time setup fee?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}, {"source": "sample-sow.txt", "page": 1}], "answer_contains": ["3,500"]}

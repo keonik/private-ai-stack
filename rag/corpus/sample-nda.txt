@@ -1,0 +1,11 @@
+MUTUAL NON-DISCLOSURE AGREEMENT (SAMPLE — SYNTHETIC)
+Between Northwind Analytics LLC and Alpine Ski House ("the Parties").
+
+1. Purpose. The Parties wish to evaluate a potential business relationship concerning on-premises document processing.
+2. Confidential Information. Means any non-public information disclosed by either Party, whether oral, written, or electronic, that is designated confidential or would reasonably be understood to be confidential.
+3. Exclusions. Information that is or becomes public through no fault of the recipient, was already known to the recipient, is independently developed, or is rightfully received from a third party.
+4. Obligations. Each Party will use the other's Confidential Information solely for the Purpose and will protect it with at least reasonable care, and no less than the care it uses for its own confidential information of like kind.
+5. Term. This Agreement is effective for two (2) years from the Effective Date. Confidentiality obligations survive for five (5) years after disclosure, and indefinitely for trade secrets.
+6. Return. Upon written request, each Party will return or destroy the other's Confidential Information within ten (10) business days and certify destruction in writing.
+7. No License. Nothing in this Agreement grants any license under any patent, copyright, or trade secret.
+8. Governing Law. This Agreement is governed by the laws of the State of Colorado.

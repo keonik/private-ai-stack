@@ -1,0 +1,11 @@
+PRIVACY & DATA HANDLING POLICY — ON-PREMISES APPLIANCE (SAMPLE — SYNTHETIC)
+Issued by Northwind Analytics LLC. Version 2.1, effective 2026-07-01.
+
+1. Data Location. All Customer documents, embeddings, indexes, and chat history are stored exclusively on the appliance located at the Customer's premises. Provider operates no cloud copy.
+2. Provider Access. Provider personnel have no standing access to the appliance. Remote support sessions require the Customer's contemporaneous written consent, are limited to the duration of the support request, and are logged.
+3. Telemetry. The appliance sends no telemetry by default. Customer may opt in to sending anonymized crash reports containing no document content.
+4. Retention. Uploaded source documents are retained until deleted by the Customer. Audit logs are retained for a minimum of seven (7) years. Chat history is retained for ninety (90) days by default; the Customer may change this.
+5. Encryption. Data at rest is protected by full-disk encryption on the appliance. Data in transit within the Customer network uses TLS 1.2 or later.
+6. Deletion. Upon termination, the Customer may wipe the appliance using the provided secure-erase procedure. Provider retains no data to delete.
+7. Subprocessors. None. The appliance operates without third-party services.
+8. Contact. Privacy questions: privacy@northwind.example.

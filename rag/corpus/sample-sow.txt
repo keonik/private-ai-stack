@@ -1,0 +1,10 @@
+STATEMENT OF WORK #1 — APPLIANCE DEPLOYMENT (SAMPLE — SYNTHETIC)
+Under the Master Services Agreement between Northwind Analytics LLC and Contoso Dental Group PC.
+
+1. Scope. Provider will deliver, install, and configure one (1) document processing appliance (Mac mini, 24 GB) at Customer's Seattle office, ingest Customer's existing document archive of approximately 40,000 pages, and train up to six (6) staff.
+2. Deliverables. (a) Installed appliance with the private LLM stack; (b) ingestion of the archive with a completion report; (c) two (2) hours of on-site training; (d) an operations runbook including backup and restore procedures.
+3. Schedule. Kickoff within five (5) business days of signature. Installation and ingestion complete within three (3) weeks of kickoff. Training in week four (4).
+4. Fees. Setup fee of $3,500 due on signature. Hardware billed at cost plus 15%. Monthly service fee per the MSA begins on the installation date.
+5. Acceptance. Customer will have ten (10) business days after installation to test. Acceptance is deemed given if no written rejection is received in that period.
+6. Assumptions. Customer provides network access, a desk location with power, and a designated point of contact. Scanned documents are legible at 300 dpi or better.
+7. Change Control. Changes to scope require a written change order signed by both parties.

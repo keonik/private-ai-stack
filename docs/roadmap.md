@@ -25,7 +25,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 
 ## 4. `finetune/` — LoRA → eval → GGUF
 - [x] Scripts: prepare data, train LoRA (MLX-LM), eval, fuse, convert to GGUF
-- [ ] Worked example: synthetic invoice→JSON, 240 pairs (`scripts/gen_synthetic_invoices.py`); before/after eval running
+- [x] Worked example: synthetic invoice→JSON, Qwen3-4B-4bit LoRA — exact match 0.00 → 1.00, JSON valid 0.17 → 1.00, field match 0.38 → 1.00 (n=24, 11 min on M4 Max)
 - [ ] Prove the GGUF runs in Ollama (`Modelfile`)
 
 ## 5. Write-ups
