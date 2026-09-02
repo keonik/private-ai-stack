@@ -9,6 +9,10 @@ BASE = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000/v1")
 KEY = os.environ.get("LITELLM_API_KEY", "")
 MODEL = os.environ.get("CHAT_MODEL", "local/chat")
 REVIEW_THRESHOLD = float(os.environ.get("REVIEW_THRESHOLD", "0.8"))
+# Reasoning ("thinking") off by default: schema-constrained extraction does not benefit and it is 5-10x slower.
+# Set EXTRACT_THINK=1 to let the model reason first (useful on messy scans). Both flags are sent because
+# Ollama honors `think` and OpenAI-compatible MLX/vLLM servers honor `chat_template_kwargs`.
+THINK = os.environ.get("EXTRACT_THINK", "0").lower() in ("1", "true", "yes")
 
 _SYS = ("You extract fields from documents into JSON matching the given schema. For every field give value, "
         "confidence (0-1, honest), and evidence (the exact source text). Use null when absent. Dates ISO-8601. "
@@ -19,7 +23,8 @@ def extract(doc_text: str, kind: str) -> BaseModel:
     schema = schema_cls.model_json_schema()
     with httpx.Client(timeout=300) as c:
         r = c.post(f"{BASE}/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
-                   json={"model": MODEL, "temperature": 0,
+                   json={"model": MODEL, "temperature": 0, "think": THINK,
+                         "chat_template_kwargs": {"enable_thinking": THINK},
                          "response_format": {"type": "json_schema", "json_schema": {"name": kind, "schema": schema}},
                          "messages": [{"role": "system", "content": _SYS},
                                       {"role": "user", "content": f"SCHEMA:\n{json.dumps(schema)}\n\nDOCUMENT:\n{doc_text[:24000]}"}]})

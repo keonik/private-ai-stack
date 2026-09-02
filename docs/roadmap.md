@@ -16,6 +16,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Synthetic 5-doc corpus with distractors + 24-question set checked in (`rag/corpus`, `rag/eval/questions.jsonl`)
 - [x] Eval harness run end to end (recall@k, MRR, citation precision, answer-contains); numbers in `rag/README.md`
 - [ ] Chunk-level ACL tags
+- [x] Same eval on two backends (Ollama/nomic vs oMLX/embeddinggemma): quality unchanged, rerank lift consistent
 - [ ] Compare 3 embedding models on the same eval
 - [x] Rerank vs no-rerank compared on the 5-doc corpus: MRR 0.948 → 0.979, top-1 22 → 23 of 24
 
@@ -23,7 +24,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Pydantic schemas (invoice, utility bill), LLM JSON-mode extraction, validation
 - [x] Recto OCR hook (`RECTO_URL`) for scanned PDFs; text PDFs read directly
 - [x] Review queue UI + approve endpoint; live-tested on a synthetic invoice (all fields conf 1.0, rules clean)
-- [x] xlsx export verified · [ ] per-document pricing page
+- [x] xlsx export verified · [x] model tiering measured (small model 13 s/doc, escalate flagged docs to 27B) · [ ] per-document pricing page
 
 ## 4. `finetune/` — LoRA → eval → GGUF
 - [x] Scripts: prepare data, train LoRA (MLX-LM), eval, fuse, convert to GGUF

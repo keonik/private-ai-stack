@@ -7,7 +7,9 @@ ok=0
 chk() { local name=$1 url=$2; shift 2
   if curl -sf -m 5 "$@" "$url" >/dev/null; then printf "  %-12s ok    %s\n" "$name" "$url"; else printf "  %-12s DOWN  %s\n" "$name" "$url"; ok=1; fi; }
 echo "services:"
-chk ollama    "${OLLAMA_HOST_URL:-http://localhost:11434}/api/tags"
+# Backends: oMLX is checked when configured (its /health is unauthenticated); Ollama is informational on a Mac running oMLX.
+if [ -n "${OMLX_BASE_URL:-}" ]; then chk omlx "$(echo "$OMLX_BASE_URL" | sed 's#host.docker.internal#localhost#; s#/v1$##')/health"; fi
+if curl -sf -m 3 "${OLLAMA_HOST_URL:-http://localhost:11434}/api/tags" >/dev/null; then printf "  %-12s ok    %s\n" ollama "${OLLAMA_HOST_URL:-http://localhost:11434}"; else printf "  %-12s off   (optional when oMLX serves local/*)\n" ollama; fi
 chk litellm   "http://localhost:${LITELLM_PORT:-4000}/health/liveliness"
 chk rag       "http://localhost:${RAG_PORT:-8088}/health"
 chk webui     "http://localhost:${WEBUI_PORT:-3000}/health"

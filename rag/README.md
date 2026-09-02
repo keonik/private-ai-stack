@@ -35,12 +35,16 @@ Measured with `privrag eval --k 4`, `local/chat` = `qwen3:8b` via Ollama, `local
 | hybrid, no rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
 | hybrid + LLM rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
 
-**Multi-document corpus** — five synthetic documents (MSA, SLA, NDA, privacy policy, SOW) that share vendor names, party names, and vocabulary, 15 chunks of ~120 tokens, 24 hand-verified questions. Retrieval can and does mis-rank here.
+**Multi-document corpus** — five synthetic documents (MSA, SLA, NDA, privacy policy, SOW) that share vendor names, party names, and vocabulary, 15 chunks of ~120 tokens, 24 hand-verified questions. Retrieval can and does mis-rank here. Same harness, two backends behind the same router:
 
-| config | n | recall@4 | MRR | top-1 correct | citation precision@4 | answer ok |
+| backend (chat · embed) | rerank | recall@4 | MRR | top-1 correct | citation precision@4 | answer ok |
 |---|---|---|---|---|---|---|
-| hybrid, no rerank | 24 | 1.00 | 0.948 | 22/24 | 0.385 | 24/24 |
-| hybrid + LLM rerank (`think=false`) | 24 | 1.00 | **0.979** | **23/24** | 0.365 | 24/24 |
+| Ollama · qwen3:8b · nomic-embed-text | no | 1.00 | 0.948 | 22/24 | 0.385 | 24/24 |
+| Ollama · qwen3:8b · nomic-embed-text | **yes** | 1.00 | **0.979** | **23/24** | 0.365 | 24/24 |
+| oMLX · Qwen3.8-27B-4bit · embeddinggemma-300m | no | 1.00 | 0.938 | 21/24 | 0.389 | 24/24 |
+| oMLX · Qwen3.8-27B-4bit · embeddinggemma-300m | **yes** | 1.00 | **0.972** | **23/24** | 0.375 | 24/24 |
+
+Two things fall out of the second pair. Swapping the backend — different engine, different chat model, different embedding model — moved nothing that matters, which is what a router is for. And the reranker's lift is consistent: +1 to +2 questions into first place on both backends. Wall clock on the oMLX rows: ~3.8 min without rerank, ~6.9 min with, because the 27B runs at ~28 tok/s and reranking adds 96 scoring calls.
 
 How to read it:
 
