@@ -1,0 +1,51 @@
+{
+  "n": 8,
+  "k": 4,
+  "rerank": false,
+  "recall@k": 1.0,
+  "mrr": 1.0,
+  "citation_precision": 1.0,
+  "answer_contains_rate": 1.0,
+  "rows": [
+    {
+      "q": "How many days written notice is required to terminate the agreement for convenience?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "What is the cure period for a material breach before termination?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "What is the monthly service fee?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "Who is responsible for scheduling and verifying backups?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "Which state's law governs the agreement?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "Is customer data transmitted to the provider's systems?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "What is the one-time setup fee?",
+      "recall_hit": true,
+      "answer_ok": true
+    },
+    {
+      "q": "What is the initial term length of the agreement?",
+      "recall_hit": true,
+      "answer_ok": true
+    }
+  ]
+}

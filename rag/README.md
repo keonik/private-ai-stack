@@ -22,13 +22,18 @@ privrag eval --k 6 --rerank        # compare
 
 ## Results
 
-| config | recall@6 | MRR | citation precision | answer ok |
-|---|---|---|---|---|
-| hybrid, no rerank | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
-| hybrid + LLM rerank | _tbd_ | _tbd_ | _tbd_ | _tbd_ |
+Measured with `privrag eval --k 4`, `local/chat` = `qwen3:8b` via Ollama, `local/embed` = `nomic-embed-text`, on an M4 Max.
 
-Fill this in from a public corpus before showing it to anyone. Numbers you
-measured beat adjectives you wrote.
+**Smoke corpus** — one synthetic contract (`corpus/sample-msa.txt`), 8 hand-verified questions. With a single document retrieval cannot fail, so this only proves the pipeline is wired correctly; it is not a benchmark.
+
+| config | n | recall@4 | MRR | citation precision | answer ok |
+|---|---|---|---|---|---|
+| hybrid, no rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
+| hybrid + LLM rerank | 8 | 1.00 | 1.00 | 1.00 | 1.00 |
+
+**Multi-document corpus** — see the next table once it lands; that one has distractor documents with overlapping vocabulary, so recall and citation precision can actually drop.
+
+The honest way to read any RAG number: if recall@k is 1.0, your corpus is too small or your questions are too easy. Add documents until it isn't, then optimize.
 
 ## Design notes
 

@@ -18,6 +18,18 @@ curl -F file=@samples/inv.pdf localhost:8090/extract/invoice
 curl localhost:8090/export -o extracted.xlsx
 ```
 
+## Verified
+
+`samples/sample-invoice.txt` through `local/chat` (`qwen3:8b`): 9/9 header fields
+and 3/3 line items extracted, every field at confidence 1.0 with a verbatim
+evidence snippet, all cross-field rules passed (subtotal + tax = total; line
+items sum to subtotal), record landed in the queue as `ok`, xlsx export
+produced a 12-column row. Try it:
+
+```bash
+curl -F file=@samples/sample-invoice.txt localhost:8090/extract/invoice | python3 -m json.tool
+```
+
 ## Add a document type
 
 Add a Pydantic model to `schemas.py` using the `F[...]` field wrapper, register

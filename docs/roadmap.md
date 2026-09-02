@@ -12,20 +12,20 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 
 ## 2. `rag/` — reference build with eval
 - [x] Hybrid retrieval (BM25 + vector, RRF), reranker hook, page citations
-- [ ] Public corpus + question set checked in
-- [ ] RAGAS-style eval run; publish numbers in README
+- [x] Synthetic corpus + 8-question set checked in (`rag/corpus`, `rag/eval/questions.jsonl`); multi-doc corpus in progress
+- [x] Eval harness run end to end (recall@k, MRR, citation precision, answer-contains); numbers in `rag/README.md`
 - [ ] Chunk-level ACL tags
 - [ ] Compare 3 embedding models on the same eval
 
 ## 3. `extract/` — structured extraction product
 - [x] Pydantic schemas (invoice, utility bill), LLM JSON-mode extraction, validation
-- [ ] Recto OCR integration for scans
-- [ ] Review queue UI for low-confidence fields
-- [ ] Excel/CSV export; per-document pricing page
+- [x] Recto OCR hook (`RECTO_URL`) for scanned PDFs; text PDFs read directly
+- [x] Review queue UI + approve endpoint; live-tested on a synthetic invoice (all fields conf 1.0, rules clean)
+- [x] xlsx export verified · [ ] per-document pricing page
 
 ## 4. `finetune/` — LoRA → eval → GGUF
 - [x] Scripts: prepare data, train LoRA (MLX-LM), eval, fuse, convert to GGUF
-- [ ] One worked example with before/after numbers
+- [ ] Worked example: synthetic invoice→JSON, 240 pairs (`scripts/gen_synthetic_invoices.py`); before/after eval running
 - [ ] Prove the GGUF runs in Ollama (`Modelfile`)
 
 ## 5. Write-ups

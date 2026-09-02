@@ -1,0 +1,123 @@
+{
+  "id": "7fb8263a-d7c2-44bf-bf25-b3e95dc1b88f",
+  "kind": "invoice",
+  "file": "sample-invoice.txt",
+  "data": {
+    "vendor_name": {
+      "value": "NORTHWIND ANALYTICS LLC",
+      "confidence": 1.0,
+      "evidence": "NORTHWIND ANALYTICS LLC"
+    },
+    "vendor_address": {
+      "value": "4120 Harbor Ave SW, Seattle, WA 98116",
+      "confidence": 1.0,
+      "evidence": "4120 Harbor Ave SW, Seattle, WA 98116"
+    },
+    "invoice_number": {
+      "value": "INV-1042",
+      "confidence": 1.0,
+      "evidence": "Invoice Number: INV-1042"
+    },
+    "invoice_date": {
+      "value": "2026-08-15",
+      "confidence": 1.0,
+      "evidence": "Invoice Date: 2026-08-15"
+    },
+    "due_date": {
+      "value": "2026-09-14",
+      "confidence": 1.0,
+      "evidence": "Due Date: 2026-09-14"
+    },
+    "currency": {
+      "value": "USD",
+      "confidence": 1.0,
+      "evidence": "Currency: USD"
+    },
+    "subtotal": {
+      "value": 4400.0,
+      "confidence": 1.0,
+      "evidence": "Subtotal:     4,400.00"
+    },
+    "tax": {
+      "value": 451.0,
+      "confidence": 1.0,
+      "evidence": "Tax (10.25%):   451.00"
+    },
+    "total": {
+      "value": 4851.0,
+      "confidence": 1.0,
+      "evidence": "TOTAL DUE:    4,851.00"
+    },
+    "line_items": [
+      {
+        "description": {
+          "value": "Document processing appliance setup",
+          "confidence": 1.0,
+          "evidence": "Document processing appliance setup"
+        },
+        "quantity": {
+          "value": 1.0,
+          "confidence": 1.0,
+          "evidence": "1"
+        },
+        "unit_price": {
+          "value": 3500.0,
+          "confidence": 1.0,
+          "evidence": "3,500.00"
+        },
+        "amount": {
+          "value": 3500.0,
+          "confidence": 1.0,
+          "evidence": "3,500.00"
+        }
+      },
+      {
+        "description": {
+          "value": "Monthly service fee (August 2026)",
+          "confidence": 1.0,
+          "evidence": "Monthly service fee (August 2026)"
+        },
+        "quantity": {
+          "value": 1.0,
+          "confidence": 1.0,
+          "evidence": "1"
+        },
+        "unit_price": {
+          "value": 600.0,
+          "confidence": 1.0,
+          "evidence": "600.00"
+        },
+        "amount": {
+          "value": 600.0,
+          "confidence": 1.0,
+          "evidence": "600.00"
+        }
+      },
+      {
+        "description": {
+          "value": "On-site training (hours)",
+          "confidence": 1.0,
+          "evidence": "On-site training (hours)"
+        },
+        "quantity": {
+          "value": 2.0,
+          "confidence": 1.0,
+          "evidence": "2"
+        },
+        "unit_price": {
+          "value": 150.0,
+          "confidence": 1.0,
+          "evidence": "150.00"
+        },
+        "amount": {
+          "value": 300.0,
+          "confidence": 1.0,
+          "evidence": "300.00"
+        }
+      }
+    ]
+  },
+  "issues": [],
+  "review": [],
+  "status": "ok"
+}

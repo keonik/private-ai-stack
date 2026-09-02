@@ -9,7 +9,7 @@ rows = [json.loads(l) for l in open(a.split) if l.strip()]
 em = jv = fm = 0; fields = 0; outs = []
 for r in rows:
     msgs = r["messages"][:-1]; want = r["messages"][-1]["content"]
-    prompt = tok.apply_chat_template(msgs, add_generation_prompt=True)
+    prompt = tok.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False, enable_thinking=False)
     got = generate(model, tok, prompt=prompt, max_tokens=a.max_tokens, verbose=False).strip()
     em += got == want.strip()
     try:
