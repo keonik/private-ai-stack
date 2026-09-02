@@ -1,0 +1,25 @@
+NORTHWIND ANALYTICS LLC
+4120 Harbor Ave SW, Seattle, WA 98116
+
+INVOICE
+
+Invoice Number: INV-1042
+Invoice Date: 2026-08-15
+Due Date: 2026-09-14
+Currency: USD
+
+Bill To:
+Contoso Dental Group PC
+900 Pine Street, Suite 300
+Seattle, WA 98101
+
+Description                                   Qty     Unit Price      Amount
+Document processing appliance setup            1       3,500.00      3,500.00
+Monthly service fee (August 2026)              1         600.00        600.00
+On-site training (hours)                       2         150.00        300.00
+
+                                                        Subtotal:     4,400.00
+                                                        Tax (10.25%):   451.00
+                                                        TOTAL DUE:    4,851.00
+
+Payment terms: Net 30. Please reference the invoice number with your payment.

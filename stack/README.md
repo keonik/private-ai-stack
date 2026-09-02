@@ -49,7 +49,7 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 - [ ] Replace the master key in Open WebUI with a per-app virtual key
 - [ ] Put :3000 behind TLS (Caddy / your tunnel); don't expose :4000 or :8088 publicly
 - [ ] Full-disk encryption on the host
-- [ ] Run `backup.sh` on a schedule and test `restore.sh` once
+- [ ] Run `backup.sh` on a schedule (restore round-trip verified: wiped index + audit log + DB all came back)
 - [ ] Read `../docs/phi-pattern.md` if the documents are regulated
 
 ## Why these pieces

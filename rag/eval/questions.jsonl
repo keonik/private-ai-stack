@@ -1,0 +1,8 @@
+{"question": "How many days written notice is required to terminate the agreement for convenience?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["30"]}
+{"question": "What is the cure period for a material breach before termination?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["15"]}
+{"question": "What is the monthly service fee?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["600"]}
+{"question": "Who is responsible for scheduling and verifying backups?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["Customer"]}
+{"question": "Which state's law governs the agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["Washington"]}
+{"question": "Is customer data transmitted to the provider's systems?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["no"]}
+{"question": "What is the one-time setup fee?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["3,500"]}
+{"question": "What is the initial term length of the agreement?", "expected_sources": [{"source": "sample-msa.txt", "page": 1}], "answer_contains": ["twelve"]}
