@@ -47,11 +47,21 @@ def main() -> None:
     ap.add_argument("dir"); ap.add_argument("--kind", required=True); ap.add_argument("--pages", type=int)
     ap.add_argument("--workers", type=int, default=2); ap.add_argument("--limit", type=int); ap.add_argument("--glob", default="*.pdf")
     ap.add_argument("--only-flagged", action="store_true", help="re-extract files whose sidecar has review flags (escalation pass with a bigger model)")
+    ap.add_argument("--where", help='JSON: re-extract files whose sidecar fields match ANY key, e.g. \'{"alcohol_or_drugs_suspected": true}\'. Use to verify rare positives with a bigger model.')
     a = ap.parse_args()
+    where = json.loads(a.where) if a.where else None
     def wanted(p: Path) -> bool:
         side = p.with_name(p.name + ".meta.json")
         if not side.exists():
-            return not a.only_flagged
+            return not (a.only_flagged or where)
+        if where:
+            try:
+                d = json.loads(side.read_text())
+                if d.get("model") == MODEL:
+                    return False  # already done by this model
+                return any(d.get("fields", {}).get(k) == v for k, v in where.items())
+            except Exception:
+                return True
         if a.only_flagged:
             try:
                 return bool(json.loads(side.read_text()).get("review"))

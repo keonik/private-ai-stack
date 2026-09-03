@@ -54,8 +54,8 @@ class CrashReportOH1(BaseModel):
     reporting_agency: F[str] = Field(default_factory=F, description="REPORTING AGENCY NAME")
     officer_name: F[str] = Field(default_factory=F, description="OFFICER'S NAME who took the report")
     animal_involved: F[bool] = Field(default_factory=F, description="True if the NARRATIVE says a deer or other animal was struck")
-    pedestrian_or_cyclist_involved: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE mentions a pedestrian or bicyclist; printed code legends do not count")
-    alcohol_or_drugs_suspected: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE mentions impairment, OVI, alcohol or drugs; printed code legends do not count")
+    pedestrian_or_cyclist_involved: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE says a person on foot, on a bicycle, e-bike or scooter was involved. Vehicle-only crashes are false.")
+    alcohol_or_drugs_suspected: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE explicitly mentions alcohol, drugs, OVI/DUI, impairment or intoxication. Citations for ACDA (assured clear distance), speed, failure to yield, license or insurance offenses are NOT alcohol or drugs.")
     injury_mentioned: F[bool] = Field(default_factory=F, description="True if the NARRATIVE mentions an injury or someone transported")
     summary: F[str] = Field(default_factory=F, description="One sentence restating the NARRATIVE")
 
