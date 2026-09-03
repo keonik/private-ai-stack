@@ -27,6 +27,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Pydantic schemas (invoice, utility bill), LLM JSON-mode extraction, validation
 - [x] Recto OCR hook (`RECTO_URL`) for scanned PDFs; text PDFs read directly
 - [x] Review queue UI + approve endpoint; live-tested on a synthetic invoice (all fields conf 1.0, rules clean)
+- [x] Two-tier extraction measured on 501 real forms: 4B everything (37 min), 27B verifies positives; alcohol false positives 12/13 → 0
 - [x] Batch mode → metadata sidecars; OH-1 schema + caption-anchored preprocessor; coded-box limitation measured and documented
 - [x] xlsx export verified · [x] model tiering measured (small model 13 s/doc, escalate flagged docs to 27B) · [ ] per-document pricing page
 

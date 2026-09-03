@@ -84,7 +84,28 @@ Two things measured on this corpus that generalize to every form PDF:
    NARRATIVE block (about 400 characters instead of 4,400): 8/8 correct on the same files, 16/min instead
    of 12/min. If the anchors are missing (another agency's template) it falls back to the full page.
 
-Results table is filled in below once the batch completes.
+Results, 501 reports:
+
+| pass | model | files | wall | rate | errors |
+|---|---|---|---|---|---|
+| extract everything | gemma4-e4b (4B) | 501 | 37 min | 13.5/min, 4 workers | 0 |
+| verify every positive | Qwen3.8-27B | 113 | ~45 min | 2-3/min, 3 workers | 0 |
+
+| field | 4B said true | after 27B verification | what the 4B got wrong |
+|---|---|---|---|
+| animal_involved | 31 | 30 | "struck an unknown object" |
+| pedestrian_or_cyclist_involved | 15 | 12 | passenger stepping out of a truck; a car with no cyclist |
+| alcohol_or_drugs_suspected | 13 | 1 | **12 of 13**: "cited for ACDA" (assured clear distance ahead) read as an alcohol citation, at confidence 1.0 |
+| injury_mentioned | 59 | 39 | "no injuries reported" counted as a mention |
+
+Recall check: a keyword scan of every narrative for alcohol/pedestrian terms found 4 reports the 4B had marked
+false; the 27B agreed with the 4B on all 4 (e.g. "not intoxicated"). So on this corpus the small model's
+misses are zero and its false positives are the whole problem, concentrated in one field, and its confidence
+score does not know. The policy that follows: **small model on everything, big model on every positive.**
+Positives are rare (about 20% of reports here), so the verification pass costs a fifth of a full 27B run.
+Field names in the schema description matter: adding "ACDA, speed, licence and insurance citations are NOT
+alcohol" is what let the 27B explain the distinction in its evidence on all 13.
+
 
 ## Add a document type
 
