@@ -40,6 +40,8 @@ AUDIT_LOG = Path(os.environ.get("AUDIT_LOG", "/data/audit.jsonl"))
 RECTO_URL = os.environ.get("RECTO_URL", "").strip()
 CHUNK_TOKENS = int(os.environ.get("CHUNK_TOKENS", "400"))
 CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "60"))
+# Polling is the default: inotify does not see host-side writes through Docker Desktop bind mounts on macOS.
+WATCH_POLL = os.environ.get("WATCH_POLL", "1") == "1"
 TABLE = "chunks"
 
 for d in (INBOX_DIR, INDEX_DIR, AUDIT_LOG.parent):
@@ -53,6 +55,8 @@ app = FastAPI(
 _db = lancedb.connect(str(INDEX_DIR))
 _bm25: BM25Okapi | None = None
 _bm25_ids: list[str] = []
+_src_chunks: dict[str, list[str]] = {}
+_doc_ids: set[str] = set()  # content hashes already indexed  # lowercased source filename -> chunk ids (page order)
 _lock = asyncio.Lock()
 
 
@@ -120,11 +124,45 @@ def _rebuild_bm25() -> None:
     rows = t.to_arrow().to_pylist()
     _bm25_ids = [r["id"] for r in rows]
     _bm25 = BM25Okapi([_tok(r["text"]) for r in rows])
+    _src_chunks.clear()
+    _doc_ids.clear()
+    _doc_ids.update(r["doc_id"] for r in rows)
+    for r in sorted(rows, key=lambda r: (r["source"], r["page"], r["id"])):
+        _src_chunks.setdefault(r["source"].lower(), []).append(r["id"])
 
 
-async def ingest_file(path: Path) -> int:
-    pages = await _extract_pages(path)
+def _id_hits(q: str, per_doc: int = 2) -> list[str]:
+    """Exact-identifier lookup: tokens like '26-29237' or 'INV-1042' that appear in a source filename.
+    BM25 splits them on punctuation and vectors barely encode them, so match the filename directly."""
+    out: list[str] = []
+    for tok in re.findall(r"[a-z0-9][a-z0-9\-]{3,}", q.lower()):
+        if not any(ch.isdigit() for ch in tok):
+            continue
+        for src, ids in _src_chunks.items():
+            if tok in src:
+                out.extend(i for i in ids[:per_doc] if i not in out)
+    return out
+
+
+def _maintain() -> None:
+    """Compact small fragments left by per-file appends and drop stale versions."""
+    t = _table()
+    if t is None:
+        return
+    try:
+        t.compact_files()
+        t.cleanup_old_versions()
+    except Exception as e:  # maintenance is best-effort
+        _audit("maintain_error", error=str(e)[:200])
+
+
+async def ingest_file(path: Path, rebuild: bool = True, force: bool = False) -> int:
+    """Index one file. Pass rebuild=False when ingesting a batch, then call _rebuild_bm25() once.
+    Returns -1 when the file's content hash is already indexed (skipped) unless force."""
     doc_id = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
+    if doc_id in _doc_ids and not force:
+        return -1
+    pages = await _extract_pages(path)
     recs: list[dict] = []
     for pno, text in pages:
         for j, ch in enumerate(_chunk(text, CHUNK_TOKENS, CHUNK_OVERLAP)):
@@ -146,7 +184,9 @@ async def ingest_file(path: Path) -> int:
         else:
             t.delete(f"doc_id = '{doc_id}'")
         t.add(recs)
-        _rebuild_bm25()
+        _doc_ids.add(doc_id)
+        if rebuild:
+            _rebuild_bm25()
     _audit("ingest", source=path.name, doc_id=doc_id, chunks=len(recs))
     return len(recs)
 
@@ -172,6 +212,8 @@ async def hybrid_search(q: str, k: int) -> list[dict]:
         order = sorted(range(len(scores)), key=lambda i: -scores[i])[: k * 3]
         bm_ranks = [_bm25_ids[i] for i in order if scores[i] > 0]
     fused = _rrf([vec_ranks, bm_ranks])
+    for n, i in enumerate(_id_hits(q)):  # filename identifier matches outrank everything
+        fused[i] = 10.0 - n * 0.001
     by_id = {h["id"]: h for h in vec_hits}
     missing = [i for i in fused if i not in by_id]
     if missing:
@@ -194,13 +236,23 @@ def health():
     return {"ok": True, "chunks": t.count_rows() if t else 0, "embed_model": EMBED_MODEL}
 
 
-@app.post("/ingest", summary="Ingest every file currently in the inbox")
-async def ingest_all():
-    n = 0
+@app.post("/ingest", summary="Ingest new/changed files in the inbox (force=true re-embeds everything)")
+async def ingest_all(force: bool = False):
+    n = skipped = done = 0
     for p in sorted(INBOX_DIR.iterdir()):
         if p.is_file() and not p.name.startswith("."):
-            n += await ingest_file(p)
-    return {"chunks_indexed": n}
+            r = await ingest_file(p, rebuild=False, force=force)
+            if r < 0:
+                skipped += 1
+            else:
+                n += r
+                done += 1
+    if done:
+        async with _lock:
+            _maintain()
+            _rebuild_bm25()
+        _audit("batch", files=done, chunks=n)
+    return {"chunks_indexed": n, "files_indexed": done, "files_skipped": skipped}
 
 
 @app.get("/search", summary="Hybrid search over private documents; returns chunks with source and page")
@@ -218,7 +270,8 @@ async def query(body: QueryIn, x_user: str | None = Header(default=None)):
         return {"answer": None, "citations": hits}
     ctx = "\n\n".join(f"[{i+1}] ({h['source']} p.{h['page']}) {h['text']}" for i, h in enumerate(hits))
     prompt = (
-        "Answer ONLY from the numbered sources below. Cite as [n] after each claim. "
+        "Answer ONLY from the numbered sources below. Cite as [n] after each claim and name the source document "
+        "(its filename) the first time you use it. "
         "If the sources do not contain the answer, say exactly: 'Not found in the provided documents.'\n\n"
         f"SOURCES:\n{ctx}\n\nQUESTION: {body.question}"
     )
@@ -239,13 +292,20 @@ async def _startup():
     _rebuild_bm25()
 
     async def watch():
-        async for changes in awatch(INBOX_DIR):
-            for _, p in changes:
-                path = Path(p)
+        async for changes in awatch(INBOX_DIR, force_polling=WATCH_POLL, poll_delay_ms=2000):
+            paths = sorted({Path(p) for _, p in changes})
+            done = 0
+            for path in paths:
                 if path.is_file() and not path.name.startswith("."):
                     try:
-                        await ingest_file(path)
+                        if await ingest_file(path, rebuild=False) >= 0:
+                            done += 1
                     except Exception as e:  # keep watching
                         _audit("ingest_error", source=path.name, error=str(e)[:200])
+            if done:
+                async with _lock:
+                    _maintain()
+                    _rebuild_bm25()
+                _audit("batch", files=done)
 
     asyncio.create_task(watch())

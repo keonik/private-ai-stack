@@ -29,8 +29,9 @@ reply=$(curl -sf -m 300 -H "$H" -H 'content-type: application/json' "$LL/v1/chat
 [ -n "$reply" ] && ok "reply: ${reply:0:40}" || bad "chat failed"
 
 step "ingest inbox"
-n=$(curl -sf -m 600 -X POST "$RAG/ingest" | python3 -c 'import sys,json; print(json.load(sys.stdin)["chunks_indexed"])' 2>/dev/null)
-[ "${n:-0}" -gt 0 ] && ok "$n chunks" || bad "ingest returned ${n:-nothing} (is data/inbox/ populated?)"
+r=$(curl -sf -m 600 -X POST "$RAG/ingest" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d["chunks_indexed"], d.get("files_skipped",0))' 2>/dev/null)
+n=${r%% *}; sk=${r##* }
+[ "${n:-0}" -gt 0 ] || [ "${sk:-0}" -gt 0 ] && ok "$n new chunks, $sk unchanged files skipped" || bad "ingest returned ${r:-nothing} (is data/inbox/ populated?)"
 
 step "hybrid search with citation"
 hit=$(curl -sf -m 60 "$RAG/search?q=notice+period+for+termination&k=3" -H "X-User: smoke" | python3 -c "import sys,json; h=json.load(sys.stdin)['hits']; print(h[0]['source'], 'p.%s'%h[0]['page'], 'score=%s'%h[0]['score']) if h else print('')" 2>/dev/null)

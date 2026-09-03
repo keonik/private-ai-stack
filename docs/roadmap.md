@@ -10,6 +10,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
 - [ ] Prometheus/Grafana or Langfuse for observability
 - [x] Deployed on the reference Mac: admin claimed, signup off, rag-ingest registered as an admin-level tool server, exposed through a Cloudflare tunnel (hostname kept out of the repo)
+- [x] Scale check: 501 form PDFs → 9,201 chunks in 5 min; batch BM25 rebuild + compaction, content-hash skip, polling watcher (macOS bind-mount inotify gap), filename identifier lookup; field-level questions over forms documented as out of scope for chunk RAG
 - [x] Smoke test: `stack/scripts/smoke.sh` (health → models → embed → chat → ingest → search → cited answer → audit → spend log); CI workflow on a CPU runner with qwen3:0.6b
 
 ## 2. `rag/` — reference build with eval

@@ -142,6 +142,38 @@ The per-user **Settings → Tools** dialog fetches the spec from your *browser*,
 `rag-ingest`; that path only works with a host-reachable URL such as `http://localhost:8088`.
 Then in any chat, open the tools menu under the prompt and enable it.
 
+## Scaling note: 500 form PDFs in one drop
+
+Measured on the reference Mac (M4 Max, oMLX backend, embeddinggemma-300m) with one day of Ohio OH-1
+traffic crash reports (public records, 4-5 text-layer pages each):
+
+| | |
+|---|---|
+| files / chunks | 501 / 9,201 |
+| ingest wall time | 5 min 1 s (~100 files/min, embed-bound) |
+| re-run with nothing changed | 0.3 s (502 files skipped by content hash) |
+| index on disk | 109 MB |
+| hybrid search, k=5 | 0.66 s |
+| grounded answer, 27B | 20-40 s |
+
+Four changes in `rag-ingest/app.py` made that work:
+
+- **Batch-aware indexing.** BM25 is rebuilt once per batch, not once per file, and LanceDB fragments are
+  compacted after each batch. Per-file rebuilds were O(n²) at this size.
+- **Content-hash skip.** Files whose bytes are already indexed are skipped; `POST /ingest?force=true`
+  re-embeds everything. Without this the smoke test re-embedded 500 files on every run.
+- **Polling watcher by default** (`WATCH_POLL=1`). Files written from the macOS side never generate inotify
+  events inside a Docker Desktop bind mount, so the inotify watcher silently missed the entire drop.
+- **Identifier lookup.** A query containing an ID-like token (`26-29237`, `INV-1042`) that matches a source
+  filename pins that document's first chunks to the top. BM25 splits such tokens on punctuation and
+  embeddings barely encode them, so "what happened in report 26-29237" previously missed the file entirely.
+
+What chunk retrieval still cannot do on this corpus: answer *field-level* questions ("which reports had a
+suspected impaired driver"). Every OH-1 carries the same code legends, so the alcohol/drug text appears in all
+501 documents and the model dutifully cites the legend. Questions about the free-text narrative (what was hit,
+where, which agency) work well. Form PDFs need structured field extraction, which is `extract/`'s job, with
+RAG over the narrative and the extracted fields used as filters.
+
 ## Thinking models
 
 `qwen3:*` (and DeepSeek-R1-style models) emit a reasoning block before the
