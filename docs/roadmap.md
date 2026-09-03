@@ -9,6 +9,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [ ] `docker compose --profile llamacpp` alternative backend
 - [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
 - [ ] Prometheus/Grafana or Langfuse for observability
+- [x] Deployed on the reference Mac: admin claimed, signup off, rag-ingest registered as an admin-level tool server, exposed through a Cloudflare tunnel (hostname kept out of the repo)
 - [x] Smoke test: `stack/scripts/smoke.sh` (health → models → embed → chat → ingest → search → cited answer → audit → spend log); CI workflow on a CPU runner with qwen3:0.6b
 
 ## 2. `rag/` — reference build with eval

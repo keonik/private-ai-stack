@@ -134,6 +134,14 @@ Check with `lsof -nP -iTCP:<port> -sTCP:LISTEN`, then override in `.env`
 else changes. Containers talk to each other by service name on the internal
 network and are unaffected.
 
+## Registering rag-ingest as a tool in Open WebUI
+
+Add it under **Admin Panel → Settings → Tools**, URL `http://rag-ingest:8080`, path `openapi.json`, no auth.
+Admin-level connections are fetched by the Open WebUI backend, so the compose service name resolves.
+The per-user **Settings → Tools** dialog fetches the spec from your *browser*, which cannot resolve
+`rag-ingest`; that path only works with a host-reachable URL such as `http://localhost:8088`.
+Then in any chat, open the tools menu under the prompt and enable it.
+
 ## Thinking models
 
 `qwen3:*` (and DeepSeek-R1-style models) emit a reasoning block before the
