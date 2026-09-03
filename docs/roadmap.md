@@ -10,6 +10,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
 - [ ] Prometheus/Grafana or Langfuse for observability
 - [x] Deployed on the reference Mac: admin claimed, signup off, rag-ingest registered as an admin-level tool server, exposed through a Cloudflare tunnel (hostname kept out of the repo)
+- [x] Extracted fields as filters: `/fields`, `/documents`, filtered `/search` and `/query` from sidecars
 - [x] Scale check: 501 form PDFs → 9,201 chunks in 5 min; batch BM25 rebuild + compaction, content-hash skip, polling watcher (macOS bind-mount inotify gap), filename identifier lookup; field-level questions over forms documented as out of scope for chunk RAG
 - [x] Smoke test: `stack/scripts/smoke.sh` (health → models → embed → chat → ingest → search → cited answer → audit → spend log); CI workflow on a CPU runner with qwen3:0.6b
 
@@ -26,6 +27,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Pydantic schemas (invoice, utility bill), LLM JSON-mode extraction, validation
 - [x] Recto OCR hook (`RECTO_URL`) for scanned PDFs; text PDFs read directly
 - [x] Review queue UI + approve endpoint; live-tested on a synthetic invoice (all fields conf 1.0, rules clean)
+- [x] Batch mode → metadata sidecars; OH-1 schema + caption-anchored preprocessor; coded-box limitation measured and documented
 - [x] xlsx export verified · [x] model tiering measured (small model 13 s/doc, escalate flagged docs to 27B) · [ ] per-document pricing page
 
 ## 4. `finetune/` — LoRA → eval → GGUF

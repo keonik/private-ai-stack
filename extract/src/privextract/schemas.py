@@ -41,4 +41,22 @@ class UtilityBill(BaseModel):
     amount_due: F[float] = F()
     due_date: F[date] = F()
 
-SCHEMAS = {"invoice": Invoice, "utility_bill": UtilityBill}
+class CrashReportOH1(BaseModel):
+    """Ohio OH-1 traffic crash report, page 1 (header + narrative).
+
+    Deliberately excludes the coded boxes (crash severity, number of units, unit in error, hit/skip): in the
+    flattened text stream their values sit next to the printed code legends and both small and large models
+    mis-assign them. Those need a layout-aware reader; the fields below are unambiguous in the text."""
+    report_number: F[str] = Field(default_factory=F, description="LOCAL REPORT NUMBER as printed, e.g. 26-29237")
+    crash_datetime: F[str] = Field(default_factory=F, description="CRASH DATE / TIME as printed, MM/DD/YYYY HH:MM")
+    county_code: F[int] = Field(default_factory=F, description="COUNTY number")
+    locality: F[str] = Field(default_factory=F, description="Name under LOCATION: CITY, VILLAGE, TOWNSHIP, e.g. 'Ravenna (Township of)'. Not the locality code.")
+    reporting_agency: F[str] = Field(default_factory=F, description="REPORTING AGENCY NAME")
+    officer_name: F[str] = Field(default_factory=F, description="OFFICER'S NAME who took the report")
+    animal_involved: F[bool] = Field(default_factory=F, description="True if the NARRATIVE says a deer or other animal was struck")
+    pedestrian_or_cyclist_involved: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE mentions a pedestrian or bicyclist; printed code legends do not count")
+    alcohol_or_drugs_suspected: F[bool] = Field(default_factory=F, description="True only if the NARRATIVE mentions impairment, OVI, alcohol or drugs; printed code legends do not count")
+    injury_mentioned: F[bool] = Field(default_factory=F, description="True if the NARRATIVE mentions an injury or someone transported")
+    summary: F[str] = Field(default_factory=F, description="One sentence restating the NARRATIVE")
+
+SCHEMAS = {"invoice": Invoice, "utility_bill": UtilityBill, "crash_oh1": CrashReportOH1}

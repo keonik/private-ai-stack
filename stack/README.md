@@ -168,11 +168,30 @@ Four changes in `rag-ingest/app.py` made that work:
   filename pins that document's first chunks to the top. BM25 splits such tokens on punctuation and
   embeddings barely encode them, so "what happened in report 26-29237" previously missed the file entirely.
 
-What chunk retrieval still cannot do on this corpus: answer *field-level* questions ("which reports had a
+What chunk retrieval alone cannot do on this corpus: answer *field-level* questions ("which reports had a
 suspected impaired driver"). Every OH-1 carries the same code legends, so the alcohol/drug text appears in all
 501 documents and the model dutifully cites the legend. Questions about the free-text narrative (what was hit,
-where, which agency) work well. Form PDFs need structured field extraction, which is `extract/`'s job, with
-RAG over the narrative and the extracted fields used as filters.
+where, which agency) work well. The fix is structured extraction feeding filters, below.
+
+## Extracted fields as filters (sidecars)
+
+`extract/scripts/batch.py` writes a `<file>.meta.json` sidecar next to each document with the extracted
+fields, per-field confidence and review flags. rag-ingest loads every sidecar in the inbox (on start, on
+`POST /ingest`, and when the watcher sees one change) and exposes:
+
+| endpoint | what it does |
+|---|---|
+| `GET /fields` | which fields exist, their types, example values. The model calls this first. |
+| `GET /documents?filter={"animal_involved": true}` | exact list of matching documents, no retrieval, no LLM. Answers "which documents ..." questions. |
+| `GET /search?q=...&filter={...}` / `POST /query {"filter": {...}}` | hybrid retrieval restricted to matching documents; hits carry their `fields`. |
+
+Filter semantics: equality per key; strings match as case-insensitive substrings; keys look in `fields`
+first, then the sidecar's top level (`review`, `model`). All three are in the OpenAPI spec, so a chat in
+Open WebUI with the tool enabled will route "which reports involved a deer in county 67" to `/documents`
+and "what happened in the Ravenna crash" to `/query`.
+
+The sidecar contract is deliberately tiny so any extractor can produce one: `{"source": "<filename>",
+"fields": {...}, "review": [...]}`.
 
 ## Thinking models
 

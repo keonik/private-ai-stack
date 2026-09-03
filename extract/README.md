@@ -54,6 +54,38 @@ the small one admits it isn't sure. `REVIEW_THRESHOLD` is the dial.
 `EXTRACT_THINK=1` turns reasoning on. It did not change accuracy here and did
 not reliably change speed; keep it off unless a document type proves otherwise.
 
+## Batch mode and sidecars
+
+```
+python scripts/batch.py --kind crash_oh1 --pages 1 --workers 4 /path/to/pdfs
+python scripts/batch.py --kind crash_oh1 --pages 1 --only-flagged /path/to/pdfs   # escalation pass, bigger CHAT_MODEL
+```
+
+Writes `<file>.meta.json` next to each document: flattened field values, per-field confidence, evidence,
+review flags, model, seconds. Existing sidecars are skipped, so re-runs only touch new files; `--only-flagged`
+re-does the ones the first pass was unsure about. `stack/rag-ingest` reads the sidecars and turns the fields
+into filters (`/fields`, `/documents`, filtered `/search`).
+
+## Worked example: Ohio OH-1 crash reports (real public records, 501 files)
+
+Schema `crash_oh1`: report number, date/time, county code, locality, agency, officer, and four narrative
+judgments (animal, pedestrian/cyclist, alcohol/drugs, injury) plus a one-sentence summary.
+
+Two things measured on this corpus that generalize to every form PDF:
+
+1. **Coded boxes are not readable from flattened text, by any model.** Page 1 flattens to
+   `1 NUMBER OF UNITS 98 - ANIMAL 99 - UNKNOWN 98 UNIT IN ERROR 5 1 - FATAL ...`. The 4B model read
+   units=98, unit-in-error=5; the 27B read unit-in-error=5 (it is 98, the deer) and severity right by luck.
+   Values sit next to legends and adjacency is a property of the PDF generator, not the form. Those fields
+   need a layout-aware reader (word coordinates), so they are excluded from the LLM schema.
+2. **Legends leak into judgments.** Given the full page, the 4B model marked 7 of 15 reports
+   `animal_involved` (a ramp collision, a tool falling off a truck) because "98 - ANIMAL" is printed on every
+   page. `privextract/prep.py` hands the model only the six caption-anchored header values plus the
+   NARRATIVE block (about 400 characters instead of 4,400): 8/8 correct on the same files, 16/min instead
+   of 12/min. If the anchors are missing (another agency's template) it falls back to the full page.
+
+Results table is filled in below once the batch completes.
+
 ## Add a document type
 
 Add a Pydantic model to `schemas.py` using the `F[...]` field wrapper, register

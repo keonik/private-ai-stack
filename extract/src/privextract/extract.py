@@ -16,11 +16,17 @@ THINK = os.environ.get("EXTRACT_THINK", "0").lower() in ("1", "true", "yes")
 
 _SYS = ("You extract fields from documents into JSON matching the given schema. For every field give value, "
         "confidence (0-1, honest), and evidence (the exact source text). Use null when absent. Dates ISO-8601. "
-        "Numbers as numbers, no currency symbols. Output only JSON.")
+        "Numbers as numbers, no currency symbols. Boolean fields must be true or false, never null: a clear absence "
+        "is false with high confidence. Output only JSON.")
 
 def extract(doc_text: str, kind: str) -> BaseModel:
     schema_cls = SCHEMAS[kind]
     schema = schema_cls.model_json_schema()
+    # Make every key of the F wrapper required. With `value` optional in the schema, constrained decoders let
+    # small models emit {"confidence":..,"evidence":..} and silently drop the value.
+    for d in schema.get("$defs", {}).values():
+        if isinstance(d, dict) and "properties" in d:
+            d["required"] = list(d["properties"])
     with httpx.Client(timeout=300) as c:
         r = c.post(f"{BASE}/chat/completions", headers={"Authorization": f"Bearer {KEY}"},
                    json={"model": MODEL, "temperature": 0, "think": THINK,

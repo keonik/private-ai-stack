@@ -56,7 +56,11 @@ _db = lancedb.connect(str(INDEX_DIR))
 _bm25: BM25Okapi | None = None
 _bm25_ids: list[str] = []
 _src_chunks: dict[str, list[str]] = {}
-_doc_ids: set[str] = set()  # content hashes already indexed  # lowercased source filename -> chunk ids (page order)
+_doc_ids: set[str] = set()  # content hashes already indexed
+_bm25_src: list[str] = []   # source per BM25 row, for filtered search
+META_SUFFIX = ".meta.json"  # sidecar written by extract/scripts/batch.py: {"source", "fields": {...}, "review": [...]}
+DOC_SUFFIXES = {".pdf", ".txt", ".md"}
+_meta: dict[str, dict] = {}  # source filename -> sidecar  # lowercased source filename -> chunk ids (page order)
 _lock = asyncio.Lock()
 
 
@@ -123,12 +127,60 @@ def _rebuild_bm25() -> None:
         return
     rows = t.to_arrow().to_pylist()
     _bm25_ids = [r["id"] for r in rows]
+    _bm25_src[:] = [r["source"] for r in rows]
     _bm25 = BM25Okapi([_tok(r["text"]) for r in rows])
     _src_chunks.clear()
     _doc_ids.clear()
     _doc_ids.update(r["doc_id"] for r in rows)
     for r in sorted(rows, key=lambda r: (r["source"], r["page"], r["id"])):
         _src_chunks.setdefault(r["source"].lower(), []).append(r["id"])
+
+
+def _is_doc(p: Path) -> bool:
+    return p.is_file() and not p.name.startswith(".") and p.suffix.lower() in DOC_SUFFIXES
+
+
+def _load_meta() -> int:
+    """(Re)load every sidecar in the inbox. Cheap: a few hundred small JSON files."""
+    _meta.clear()
+    for p in INBOX_DIR.glob(f"*{META_SUFFIX}"):
+        try:
+            d = json.loads(p.read_text())
+            _meta[d.get("source") or p.name[: -len(META_SUFFIX)]] = d
+        except Exception as e:
+            _audit("meta_error", source=p.name, error=str(e)[:200])
+    return len(_meta)
+
+
+def _match(meta: dict, flt: dict) -> bool:
+    """Equality per key; strings match case-insensitively as substrings. Keys look in `fields` first."""
+    f = meta.get("fields", {})
+    for k, v in flt.items():
+        cur = f.get(k) if k in f else meta.get(k)
+        if isinstance(v, str) and isinstance(cur, str):
+            if v.lower() not in cur.lower():
+                return False
+        elif cur != v:
+            return False
+    return True
+
+
+def _allowed_sources(flt: dict | None) -> set[str] | None:
+    if not flt:
+        return None
+    return {src for src, m in _meta.items() if _match(m, flt)}
+
+
+def _parse_filter(s: str | None) -> dict:
+    if not s:
+        return {}
+    try:
+        d = json.loads(s)
+    except Exception:
+        raise HTTPException(400, "filter must be a JSON object, e.g. {\"animal_involved\": true}")
+    if not isinstance(d, dict):
+        raise HTTPException(400, "filter must be a JSON object")
+    return d
 
 
 def _id_hits(q: str, per_doc: int = 2) -> list[str]:
@@ -199,28 +251,38 @@ def _rrf(rank_lists: list[list[str]], k: int = 60) -> dict[str, float]:
     return scores
 
 
-async def hybrid_search(q: str, k: int) -> list[dict]:
+async def hybrid_search(q: str, k: int, flt: dict | None = None) -> list[dict]:
     t = _table()
     if t is None:
         return []
+    allowed = _allowed_sources(flt)
+    if allowed is not None and not allowed:
+        return []
     qv = (await _embed([q]))[0]
-    vec_hits = t.search(qv).limit(k * 3).to_list()
+    vq = t.search(qv)
+    if allowed is not None:
+        vq = vq.where("source IN (" + ",".join("'" + a.replace("'", "''") + "'" for a in allowed) + ")", prefilter=True)
+    vec_hits = vq.limit(k * 3).to_list()
     vec_ranks = [h["id"] for h in vec_hits]
     bm_ranks: list[str] = []
     if _bm25 is not None:
         scores = _bm25.get_scores(_tok(q))
-        order = sorted(range(len(scores)), key=lambda i: -scores[i])[: k * 3]
+        cand = range(len(scores)) if allowed is None else [i for i in range(len(scores)) if _bm25_src[i] in allowed]
+        order = sorted(cand, key=lambda i: -scores[i])[: k * 3]
         bm_ranks = [_bm25_ids[i] for i in order if scores[i] > 0]
     fused = _rrf([vec_ranks, bm_ranks])
     for n, i in enumerate(_id_hits(q)):  # filename identifier matches outrank everything
-        fused[i] = 10.0 - n * 0.001
+        src = next((sname for sname, ids in _src_chunks.items() if i in ids), None)
+        if allowed is None or (src is not None and any(src == a.lower() for a in allowed)):
+            fused[i] = 10.0 - n * 0.001
     by_id = {h["id"]: h for h in vec_hits}
     missing = [i for i in fused if i not in by_id]
     if missing:
         rows = t.search().where(f"id IN ({','.join(repr(m) for m in missing)})").limit(len(missing)).to_list()
         by_id.update({r["id"]: r for r in rows})
     top = sorted(fused, key=lambda i: -fused[i])[:k]
-    return [{"id": i, "source": by_id[i]["source"], "page": by_id[i]["page"], "text": by_id[i]["text"], "score": round(fused[i], 5)} for i in top if i in by_id]
+    return [{"id": i, "source": by_id[i]["source"], "page": by_id[i]["page"], "text": by_id[i]["text"], "score": round(fused[i], 5),
+             "fields": _meta.get(by_id[i]["source"], {}).get("fields")} for i in top if i in by_id]
 
 
 # ---------------------------------------------------------------- API
@@ -228,19 +290,45 @@ class QueryIn(BaseModel):
     question: str
     k: int = 6
     answer: bool = True
+    filter: dict | None = None  # restrict to documents whose extracted fields match, e.g. {"county_code": 67}
 
 
 @app.get("/health")
 def health():
     t = _table()
-    return {"ok": True, "chunks": t.count_rows() if t else 0, "embed_model": EMBED_MODEL}
+    return {"ok": True, "chunks": t.count_rows() if t else 0, "docs_with_fields": len(_meta), "embed_model": EMBED_MODEL}
+
+
+@app.get("/fields", summary="Which extracted fields exist and example values; use before filtering /docs or /search")
+def fields():
+    out: dict[str, dict] = {}
+    for m in _meta.values():
+        for k, v in m.get("fields", {}).items():
+            e = out.setdefault(k, {"type": type(v).__name__ if v is not None else "null", "docs_with_value": 0, "example_values": []})
+            if v is None:
+                continue
+            e["docs_with_value"] += 1
+            if v not in e["example_values"] and len(e["example_values"]) < 6 and not (isinstance(v, str) and len(v) > 80):
+                e["example_values"].append(v)
+    return {"docs_with_fields": len(_meta), "fields": out}
+
+
+@app.get("/documents", summary="List documents whose extracted fields match a filter, e.g. filter={\"animal_involved\": true}. Answers 'which documents ...' questions exactly, without retrieval")
+def docs(filter: str | None = Query(default=None, description="JSON object of field: value; strings match as case-insensitive substrings"),
+         limit: int = 50, x_user: str | None = Header(default=None)):
+    flt = _parse_filter(filter)
+    hits = [{"source": src, "fields": m.get("fields", {}), "review": m.get("review", []), "model": m.get("model")}
+            for src, m in sorted(_meta.items()) if _match(m, flt)]
+    _audit("docs", user=x_user, filter=flt, matched=len(hits))
+    return {"matched": len(hits), "docs": hits[:limit]}
 
 
 @app.post("/ingest", summary="Ingest new/changed files in the inbox (force=true re-embeds everything)")
 async def ingest_all(force: bool = False):
     n = skipped = done = 0
+    _load_meta()
     for p in sorted(INBOX_DIR.iterdir()):
-        if p.is_file() and not p.name.startswith("."):
+        if _is_doc(p):
             r = await ingest_file(p, rebuild=False, force=force)
             if r < 0:
                 skipped += 1
@@ -256,15 +344,17 @@ async def ingest_all(force: bool = False):
 
 
 @app.get("/search", summary="Hybrid search over private documents; returns chunks with source and page")
-async def search(q: str = Query(..., description="natural-language query"), k: int = 6, x_user: str | None = Header(default=None)):
-    hits = await hybrid_search(q, k)
+async def search(q: str = Query(..., description="natural-language query"), k: int = 6,
+                 filter: str | None = Query(default=None, description="optional JSON object of extracted field: value to restrict documents"),
+                 x_user: str | None = Header(default=None)):
+    hits = await hybrid_search(q, k, _parse_filter(filter))
     _audit("search", user=x_user, q_hash=hashlib.sha256(q.encode()).hexdigest()[:16], returned=[h["id"] for h in hits])
     return {"hits": hits}
 
 
 @app.post("/query", summary="Answer a question from private documents with citations")
 async def query(body: QueryIn, x_user: str | None = Header(default=None)):
-    hits = await hybrid_search(body.question, body.k)
+    hits = await hybrid_search(body.question, body.k, body.filter)
     _audit("query", user=x_user, q_hash=hashlib.sha256(body.question.encode()).hexdigest()[:16], returned=[h["id"] for h in hits])
     if not body.answer or not hits:
         return {"answer": None, "citations": hits}
@@ -290,13 +380,16 @@ async def query(body: QueryIn, x_user: str | None = Header(default=None)):
 @app.on_event("startup")
 async def _startup():
     _rebuild_bm25()
+    _load_meta()
 
     async def watch():
         async for changes in awatch(INBOX_DIR, force_polling=WATCH_POLL, poll_delay_ms=2000):
             paths = sorted({Path(p) for _, p in changes})
             done = 0
+            if any(p.name.endswith(META_SUFFIX) for p in paths):
+                _load_meta()
             for path in paths:
-                if path.is_file() and not path.name.startswith("."):
+                if _is_doc(path):
                     try:
                         if await ingest_file(path, rebuild=False) >= 0:
                             done += 1
