@@ -328,8 +328,8 @@ install the app. Slack and Discord webhooks work the same way. Unset, alerts sti
 the notifications go to a dead address.
 
 Verified end to end on the reference Mac: contact-point test delivered; then `docker compose stop
-rag-ingest` → the "Service down" alert for `rag-ingest` arrived at a local webhook receiver ~3 min later
-(2 min `for` + evaluation interval); `docker compose start` resolved it. Every dashboard query and
+rag-ingest` → the "Service down" alert for `rag-ingest` arrived at a local webhook receiver 3 min 46 s later
+(2 min `for` + evaluation and grouping intervals). Every dashboard query and
 alert expression was run against the live datasources before being committed (30 PromQL, 4 SQL, 6 rules).
 
 Why not cAdvisor: Docker 29 with the containerd image store (`docker info` → `overlayfs [driver-type

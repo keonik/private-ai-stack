@@ -1,2 +1,7 @@
 == before-schema 05:40:55
 Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 1027.88it/s]
+{'model': 'mlx-community/Qwen3-4B-4bit', 'adapter': None, 'n': 51, 'exact_match': 0.0, 'json_valid': 1.0, 'field_match': 0.7967914438502673, 'per_field': {'report_number': 1.0, 'crash_datetime': 1.0, 'county_code': 0.0, 'locality': 0.941, 'reporting_agency': 0.922, 'officer_name': 0.902, 'animal_involved': 1.0, 'pedestrian_or_cyclist_involved': 1.0, 'alcohol_or_drugs_suspected': 1.0, 'injury_mentioned': 0.98, 'summary': 0.02}}
+== after 05:42:44
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 1622.97it/s]
+{'model': 'mlx-community/Qwen3-4B-4bit', 'adapter': 'oh1/adapters', 'n': 51, 'exact_match': 0.058823529411764705, 'json_valid': 1.0, 'field_match': 0.9037433155080213, 'per_field': {'report_number': 1.0, 'crash_datetime': 1.0, 'county_code': 1.0, 'locality': 0.961, 'reporting_agency': 0.961, 'officer_name': 0.922, 'animal_involved': 1.0, 'pedestrian_or_cyclist_involved': 1.0, 'alcohol_or_drugs_suspected': 1.0, 'injury_mentioned': 1.0, 'summary': 0.098}}
+== done 05:45:10

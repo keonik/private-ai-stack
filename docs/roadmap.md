@@ -38,6 +38,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 ## 4. `finetune/` — LoRA → eval → GGUF
 - [x] Scripts: prepare data, train LoRA (MLX-LM), eval, fuse, convert to GGUF
 - [x] Worked example: synthetic invoice→JSON, Qwen3-4B-4bit LoRA — exact match 0.00 → 1.00, JSON valid 0.17 → 1.00, field match 0.38 → 1.00 (n=24, 11 min on M4 Max)
+- [x] Real-data run: Qwen3-4B LoRA on 501 OH-1 reports labelled by the two-tier extractor — 10 structured fields 0.87 → 0.98 vs the schema-prompted base, from a 60-character prompt; 15 min training
 - [x] GGUF q8_0 (4.28 GB) exported via llama.cpp converter, loaded in Ollama, 3/3 exact on held-out invoices
 
 ## 5. Write-ups
