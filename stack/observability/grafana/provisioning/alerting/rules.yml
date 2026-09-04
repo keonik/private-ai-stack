@@ -72,6 +72,70 @@
      "isPaused": false
     },
     {
+     "uid": "pas-public-down",
+     "title": "Public hostname unreachable",
+     "condition": "C",
+     "for": "5m",
+     "labels": {
+      "severity": "critical"
+     },
+     "annotations": {
+      "summary": "{{ $labels.service }} cannot be reached from the internet",
+      "description": "The service itself may be fine: this is the tunnel, DNS or the proxy in front of it. A Cloudflare Access login page counts as reachable."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "min by (service) (probe_success{job=\"public\"})",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "lt",
+           "params": [
+            1
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
      "uid": "pas-llm-errors",
      "title": "Model requests failing",
      "condition": "C",
@@ -80,7 +144,7 @@
       "severity": "warning"
      },
      "annotations": {
-      "summary": "{{ $values.A }} failed model requests in the last 10 minutes",
+      "summary": "{{ $values.A.Value | printf \"%.0f\" }} failed model requests in the last 10 minutes",
       "description": "Look at the Errors panel and the LiteLLM logs; usually the backend is down or a model was renamed."
      },
      "data": [
@@ -144,7 +208,7 @@
       "severity": "warning"
      },
      "annotations": {
-      "summary": "local/chat p95 is {{ $values.A | printf \"%.0f\" }} s",
+      "summary": "local/chat p95 is {{ $values.A.Value | printf \"%.0f\" }} s",
       "description": "Sustained slowness: a batch job is sharing the GPU, or the model is swapping."
      },
      "data": [
@@ -208,7 +272,7 @@
       "severity": "warning"
      },
      "annotations": {
-      "summary": "{{ $values.A }} files failed to index in the last 10 minutes",
+      "summary": "{{ $values.A.Value | printf \"%.0f\" }} files failed to index in the last 10 minutes",
       "description": "See data/audit.jsonl ingest_error events for the filename and reason."
      },
      "data": [
@@ -272,7 +336,7 @@
       "severity": "warning"
      },
      "annotations": {
-      "summary": "{{ $labels.service }} restarted {{ $values.A }} times in the last hour",
+      "summary": "{{ $labels.service }} restarted {{ $values.A.Value | printf \"%.0f\" }} times in the last hour",
       "description": "docker compose logs <service>"
      },
      "data": [
@@ -285,7 +349,7 @@
        "datasourceUid": "prom",
        "model": {
         "refId": "A",
-        "expr": "max by (service) (delta(container_restarts_total[1h]))",
+        "expr": "max by (service) (clamp_min(increase(container_restarts_total[1h]), 0))",
         "instant": true,
         "intervalMs": 15000,
         "maxDataPoints": 100
@@ -336,7 +400,7 @@
       "severity": "warning"
      },
      "annotations": {
-      "summary": "Containers use {{ $values.A | humanizePercentage }} of the Docker memory limit",
+      "summary": "Containers use {{ $values.A.Value | humanizePercentage }} of the Docker memory limit",
       "description": "On macOS this is the colima / Docker Desktop VM, not the Mac. Raise the VM memory or trim services."
      },
      "data": [
