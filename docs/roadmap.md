@@ -8,7 +8,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Second backend wired and swapped live: oMLX (chat/embed/STT) alongside Ollama; router-only change
 - [ ] `docker compose --profile llamacpp` alternative backend
 - [x] Reverse-proxy example (Caddy) with TLS (`stack/Caddyfile.example`)
-- [ ] Prometheus/Grafana or Langfuse for observability
+- [x] Observability profile: Prometheus + blackbox + docker-stats exporter + Loki/Alloy + Grafana, two provisioned dashboards (overview incl. TTFT and spend from Postgres; RAG service), six alert rules to a webhook; alert delivery verified end to end
 - [x] Deployed on the reference Mac: admin claimed, signup off, rag-ingest registered as an admin-level tool server, exposed through a Cloudflare tunnel (hostname kept out of the repo)
 - [x] Extracted fields as filters: `/fields`, `/documents`, filtered `/search` and `/query` from sidecars
 - [x] Scale check: 501 form PDFs → 9,201 chunks in 5 min; batch BM25 rebuild + compaction, content-hash skip, polling watcher (macOS bind-mount inotify gap), filename identifier lookup; field-level questions over forms documented as out of scope for chunk RAG

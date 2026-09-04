@@ -24,7 +24,8 @@ from typing import Any
 import httpx
 import lancedb
 import pyarrow as pa
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from pydantic import BaseModel
 from pypdf import PdfReader
 from rank_bm25 import BM25Okapi
@@ -67,6 +68,16 @@ ACL_FILE = Path(os.environ.get("ACL_FILE", "/data/acl.json"))  # optional per-gr
 _acl_cache: tuple[float, dict | None] = (0.0, None)
 _lock = asyncio.Lock()
 
+# ---------------------------------------------------------------- metrics (scraped by the observability profile)
+M_REQ = Counter("rag_requests_total", "HTTP requests", ["endpoint", "status"])
+M_LAT = Histogram("rag_request_seconds", "Request latency", ["endpoint"], buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120))
+M_EMBED = Histogram("rag_embed_seconds", "Embedding call latency", buckets=(0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30))
+M_INGESTED = Counter("rag_ingested_files_total", "Files indexed", ["result"])  # indexed | skipped | removed | error
+M_CHUNKS = Gauge("rag_chunks", "Chunks in the index")
+M_DOCS = Gauge("rag_documents", "Documents in the index")
+M_DOCS_FIELDS = Gauge("rag_documents_with_fields", "Documents with an extracted-field sidecar")
+M_HITS = Histogram("rag_search_hits", "Hits returned per search/query", buckets=(0, 1, 2, 4, 6, 10, 20))
+
 
 # ---------------------------------------------------------------- helpers
 def _audit(event: str, **kw: Any) -> None:
@@ -89,6 +100,11 @@ def _chunk(text: str, size: int, overlap: int) -> list[str]:
 
 
 async def _embed(texts: list[str]) -> list[list[float]]:
+    with M_EMBED.time():
+        return await _embed_raw(texts)
+
+
+async def _embed_raw(texts: list[str]) -> list[list[float]]:
     async with httpx.AsyncClient(timeout=120) as c:
         r = await c.post(
             f"{LITELLM_BASE_URL}/embeddings",
@@ -140,6 +156,7 @@ def _rebuild_bm25() -> None:
     _doc_ids.update(r["doc_id"] for r in rows)
     for r in sorted(rows, key=lambda r: (r["source"], r["page"], r["id"])):
         _src_chunks.setdefault(r["source"].lower(), []).append(r["id"])
+    M_CHUNKS.set(len(rows)); M_DOCS.set(len(_src_chunks))
 
 
 def _is_doc(p: Path) -> bool:
@@ -155,6 +172,7 @@ def _load_meta() -> int:
             _meta[d.get("source") or p.name[: -len(META_SUFFIX)]] = d
         except Exception as e:
             _audit("meta_error", source=p.name, error=str(e)[:200])
+    M_DOCS_FIELDS.set(len(_meta))
     return len(_meta)
 
 
@@ -271,6 +289,7 @@ def _remove_source(name: str) -> int:
         return 0
     t.delete(f"source = '{_q(name)}'")
     _meta.pop(name, None)
+    M_INGESTED.labels("removed").inc()
     return len(ids)
 
 
@@ -290,6 +309,7 @@ async def ingest_file(path: Path, rebuild: bool = True, force: bool = False) -> 
     Returns -1 when the file's content hash is already indexed (skipped) unless force."""
     doc_id = hashlib.sha256(path.read_bytes()).hexdigest()[:16]
     if doc_id in _doc_ids and not force:
+        M_INGESTED.labels("skipped").inc()
         return -1
     pages = await _extract_pages(path)
     recs: list[dict] = []
@@ -317,6 +337,7 @@ async def ingest_file(path: Path, rebuild: bool = True, force: bool = False) -> 
         if rebuild:
             _rebuild_bm25()
     _audit("ingest", source=path.name, doc_id=doc_id, chunks=len(recs))
+    M_INGESTED.labels("indexed").inc()
     return len(recs)
 
 
@@ -375,6 +396,27 @@ async def hybrid_search(q: str, k: int, flt: dict | None = None, scope: set[str]
 
 
 # ---------------------------------------------------------------- API
+@app.middleware("http")
+async def _metrics_mw(request: Request, call_next):
+    ep = request.url.path
+    if ep in ("/metrics", "/health", "/docs", "/openapi.json"):
+        return await call_next(request)
+    t0 = time.perf_counter()
+    status = "500"
+    try:
+        resp = await call_next(request)
+        status = str(resp.status_code)
+        return resp
+    finally:
+        M_REQ.labels(ep, status).inc()
+        M_LAT.labels(ep).observe(time.perf_counter() - t0)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 class QueryIn(BaseModel):
     question: str
     k: int = 6
@@ -442,6 +484,7 @@ async def search(q: str = Query(..., description="natural-language query"), k: i
                  bm25_weight: float | None = Query(default=None, description="evaluation only: lexical weight in the fusion"),
                  who: Caller = Depends()):
     hits = await hybrid_search(q, k, _parse_filter(filter), who.scope, mode, bm25_weight)
+    M_HITS.observe(len(hits))
     _audit("search", user=who.user, q_hash=hashlib.sha256(q.encode()).hexdigest()[:16], returned=[h["id"] for h in hits])
     return {"hits": hits}
 
@@ -449,6 +492,7 @@ async def search(q: str = Query(..., description="natural-language query"), k: i
 @app.post("/query", summary="Answer a question from private documents with citations")
 async def query(body: QueryIn, who: Caller = Depends()):
     hits = await hybrid_search(body.question, body.k, body.filter, who.scope)
+    M_HITS.observe(len(hits))
     _audit("query", user=who.user, q_hash=hashlib.sha256(body.question.encode()).hexdigest()[:16], returned=[h["id"] for h in hits])
     if not body.answer or not hits:
         return {"answer": None, "citations": hits}
@@ -493,6 +537,7 @@ async def _startup():
                             done += 1
                     except Exception as e:  # keep watching
                         _audit("ingest_error", source=path.name, error=str(e)[:200])
+                        M_INGESTED.labels("error").inc()
                 elif not path.exists() and path.suffix.lower() in DOC_SUFFIXES and path.name.lower() in _src_chunks:
                     async with _lock:
                         if _remove_source(path.name):

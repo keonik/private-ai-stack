@@ -128,7 +128,90 @@ services:
               count: all
               capabilities: [gpu]
 
+  # ---- Observability (optional): docker compose --profile obs up -d  → Grafana at :3001 ----
+  prometheus:
+    profiles: ["obs"]
+    image: prom/prometheus:v3.3.0
+    restart: unless-stopped
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - sed "s|__LITELLM_KEY__|$$LITELLM_MASTER_KEY|" /etc/prometheus/prometheus.tpl.yml > /prometheus/prometheus.yml
+        && exec prometheus --config.file=/prometheus/prometheus.yml --storage.tsdb.path=/prometheus/data
+        --storage.tsdb.retention.time=${METRICS_RETENTION:-30d} --web.enable-lifecycle
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  blackbox:
+    profiles: ["obs"]
+    image: prom/blackbox-exporter:v0.26.0
+    restart: unless-stopped
+    volumes:
+      - ./observability/blackbox:/etc/blackbox_exporter:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  docker-stats:
+    profiles: ["obs"]
+    image: python:3.12-slim
+    restart: unless-stopped
+    command: ["python", "/exporter.py"]
+    environment:
+      COMPOSE_PROJECT: private-ai-stack
+    volumes:
+      - ./observability/docker-stats/exporter.py:/exporter.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  loki:
+    profiles: ["obs"]
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yml"]
+    volumes:
+      - ./observability/loki:/etc/loki:ro
+      - loki_data:/loki
+
+  alloy:
+    profiles: ["obs"]
+    image: grafana/alloy:v1.8.1
+    restart: unless-stopped
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    volumes:
+      - ./observability/alloy:/etc/alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+
+  grafana:
+    profiles: ["obs"]
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+      POSTGRES_USER: ${POSTGRES_USER:-litellm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-litellm}
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-http://alloy:12345/unset-alert-webhook}
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on: [prometheus, loki]
+
 volumes:
   postgres_data:
   open_webui_data:
   ollama_data:
+  prometheus_data:
+  loki_data:
+  grafana_data:

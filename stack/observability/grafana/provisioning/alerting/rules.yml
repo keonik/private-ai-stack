@@ -1,0 +1,397 @@
+{
+ "apiVersion": 1,
+ "groups": [
+  {
+   "orgId": 1,
+   "name": "private-ai-stack",
+   "folder": "Private AI stack",
+   "interval": "1m",
+   "rules": [
+    {
+     "uid": "pas-service-down",
+     "title": "Service down",
+     "condition": "C",
+     "for": "2m",
+     "labels": {
+      "severity": "critical"
+     },
+     "annotations": {
+      "summary": "{{ $labels.service }} is not answering its health endpoint",
+      "description": "Probed every 15 s by blackbox. oMLX is probed on the host at :8002."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "min by (service) (probe_success)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "lt",
+           "params": [
+            1
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-llm-errors",
+     "title": "Model requests failing",
+     "condition": "C",
+     "for": "0s",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "{{ $values.A }} failed model requests in the last 10 minutes",
+      "description": "Look at the Errors panel and the LiteLLM logs; usually the backend is down or a model was renamed."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "sum(increase(litellm_proxy_failed_requests_metric_total[10m])) or vector(0)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            3
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-chat-slow",
+     "title": "Chat p95 latency over 2 minutes",
+     "condition": "C",
+     "for": "10m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "local/chat p95 is {{ $values.A | printf \"%.0f\" }} s",
+      "description": "Sustained slowness: a batch job is sharing the GPU, or the model is swapping."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "histogram_quantile(0.95, sum by (le) (rate(litellm_request_total_latency_metric_bucket{requested_model=\"local/chat\"}[15m])))",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            120
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-rag-ingest-errors",
+     "title": "Document ingest errors",
+     "condition": "C",
+     "for": "0s",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "{{ $values.A }} files failed to index in the last 10 minutes",
+      "description": "See data/audit.jsonl ingest_error events for the filename and reason."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "sum(increase(rag_ingested_files_total{result=\"error\"}[10m])) or vector(0)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-restarts",
+     "title": "Container restarting",
+     "condition": "C",
+     "for": "0s",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "{{ $labels.service }} restarted {{ $values.A }} times in the last hour",
+      "description": "docker compose logs <service>"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "max by (service) (delta(container_restarts_total[1h]))",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            2
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-memory",
+     "title": "Container memory above 85% of the Docker VM",
+     "condition": "C",
+     "for": "5m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "Containers use {{ $values.A | humanizePercentage }} of the Docker memory limit",
+      "description": "On macOS this is the colima / Docker Desktop VM, not the Mac. Raise the VM memory or trim services."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "sum(container_memory_bytes) / max(container_memory_limit_bytes)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0.85
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    }
+   ]
+  }
+ ]
+}

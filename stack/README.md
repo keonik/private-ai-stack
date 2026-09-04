@@ -40,6 +40,7 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 | Remove a document | delete it from `data/inbox/` — its chunks and sidecar go with it (see "Removing documents") |
 | Restrict which users see which documents | `data/acl.json` + three headers on the tool-server connection (see "Per-group document scoping") |
 | Measure retrieval on your own corpus | `python3 scripts/rag_eval.py` (see "Retrieval evaluation") |
+| See what the stack is doing: uptime, latency, tokens, spend, containers, logs, alerts | `docker compose --profile obs up -d` → Grafana at :3001 (see "Observability") |
 
 ## What's audited
 
@@ -285,6 +286,58 @@ should sit nearer 1; it is an env var for that reason, not a constant.
 The ceiling is real, too: many questions ("Columbus collision Unit 1 Unit 2") are genuinely ambiguous
 among same-day Columbus crashes, so ~0.9 recall@10 is close to what the questions allow, and the
 misses are the same handful of generic questions in every mode.
+
+## Observability
+
+`docker compose --profile obs up -d` adds six small containers and two provisioned dashboards. Nothing
+in the main stack changes except one line in `litellm/config.yaml` (`callbacks: ["prometheus"]`) and a
+`/metrics` endpoint on rag-ingest. Grafana is at `:3001` (`GRAFANA_USER` / `GRAFANA_PASSWORD`).
+
+| piece | what it gives you | where it comes from |
+|---|---|---|
+| Prometheus | 30 days of metrics | scrapes LiteLLM `/metrics/` (with the master key), rag-ingest, the docker-stats exporter, blackbox, itself |
+| blackbox | **is it up** — one probe per service every 15 s, including oMLX on the host | `/health`-style URLs; a 401 from oMLX still counts as up |
+| docker-stats | CPU %, memory, network, restarts per container | 120 lines of stdlib Python over the Docker socket (`observability/docker-stats/exporter.py`) |
+| Loki + Alloy | every container's stdout/stderr, 14 days, searchable by service | Alloy discovers compose containers over the socket |
+| Grafana | the dashboards and alerts below; also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
+
+**Dashboards** (`observability/grafana/build_dashboards.py` generates the JSON; edit the Python, not the JSON):
+
+- *Overview* — up/down tiles; requests per minute, p50/p95 latency, tokens per minute and failures by model
+  from LiteLLM's live counters; **time to first token** per model, requests per hour, spend per day and a
+  who-used-what table from the spend log; CPU, memory and network per container; an error/warning log
+  panel across the stack.
+- *RAG service* — index size, ingest errors, search/query p95, requests by endpoint, embedding latency
+  (a proxy for "is oMLX busy"), hits per search (drops to 0 when a filter or ACL excludes everything),
+  files indexed / skipped / removed, rag-ingest logs.
+
+**Alerts** (Grafana-managed, provisioned in `provisioning/alerting/rules.yml`, evaluated every minute):
+
+| alert | fires when |
+|---|---|
+| Service down | any probe fails for 2 min |
+| Model requests failing | more than 3 failed model calls in 10 min |
+| Chat p95 latency over 2 minutes | sustained 10 min |
+| Document ingest errors | any file fails to index |
+| Container restarting | more than 2 restarts in an hour |
+| Container memory above 85 % of the Docker VM | for 5 min (that is the colima / Docker Desktop VM, not the Mac) |
+
+They all go to one webhook contact point, `ALERT_WEBHOOK_URL`. The simplest thing that reaches a phone is
+an [ntfy](https://ntfy.sh) topic: set `ALERT_WEBHOOK_URL=https://ntfy.sh/<a long random topic name>` and
+install the app. Slack and Discord webhooks work the same way. Unset, alerts still show in Grafana and
+the notifications go to a dead address.
+
+Verified end to end on the reference Mac: contact-point test delivered; then `docker compose stop
+rag-ingest` → the "Service down" alert for `rag-ingest` arrived at a local webhook receiver ~3 min later
+(2 min `for` + evaluation interval); `docker compose start` resolved it. Every dashboard query and
+alert expression was run against the live datasources before being committed (30 PromQL, 4 SQL, 6 rules).
+
+Why not cAdvisor: Docker 29 with the containerd image store (`docker info` → `overlayfs [driver-type
+io.containerd.snapshotter.v1]`, the colima default) leaves cAdvisor unable to identify containers
+("failed to identify the read-write layer ID"), so it reports nothing per container. The stdlib
+exporter reads the same numbers `docker stats` shows and does not care which storage driver is in use.
+
+Cost on the box: the six containers idle at ~1 % CPU and ~270 MB of the VM's memory combined.
 
 ## Thinking models
 

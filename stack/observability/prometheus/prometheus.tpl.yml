@@ -1,0 +1,40 @@
+# Rendered to /prometheus/prometheus.yml at container start (the LiteLLM key is substituted in; see compose).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+scrape_configs:
+  - job_name: litellm
+    metrics_path: /metrics/
+    authorization: { credentials: "__LITELLM_KEY__" }
+    static_configs: [{ targets: ["litellm:4000"] }]
+  - job_name: rag-ingest
+    static_configs: [{ targets: ["rag-ingest:8080"] }]
+  - job_name: docker
+    static_configs: [{ targets: ["docker-stats:9417"] }]
+  - job_name: prometheus
+    static_configs: [{ targets: ["localhost:9090"] }]
+  - job_name: loki
+    static_configs: [{ targets: ["loki:3100"] }]
+  - job_name: grafana
+    static_configs: [{ targets: ["grafana:3000"] }]
+  # "Is it up" probes. A 401 from oMLX still proves the server answers (no key is sent on purpose).
+  - job_name: probes
+    metrics_path: /probe
+    params: { module: [http_up] }
+    static_configs:
+      - targets:
+          - http://litellm:4000/health/liveliness
+          - http://open-webui:8080/health
+          - http://rag-ingest:8080/health
+          - http://host.docker.internal:8002/v1/models
+        labels: { kind: service }
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_target]
+        regex: "https?://([^:/]+).*"
+        target_label: service
+      - target_label: __address__
+        replacement: blackbox:9115

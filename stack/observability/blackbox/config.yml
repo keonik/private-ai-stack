@@ -1,0 +1,8 @@
+modules:
+  http_up:
+    prober: http
+    timeout: 5s
+    http:
+      valid_status_codes: [200, 401]
+      follow_redirects: true
+      preferred_ip_protocol: ip4

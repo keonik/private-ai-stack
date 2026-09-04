@@ -60,6 +60,7 @@ litellm_settings:
   set_verbose: false
   success_callback: []
   failure_callback: []
+  callbacks: ["prometheus"]  # /metrics for the observability profile
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
