@@ -22,3 +22,5 @@ finetune/fused/
 finetune/fused.gguf
 finetune/Modelfile
 **/queue/
+finetune/oh1/raw/
+finetune/oh1/eval/

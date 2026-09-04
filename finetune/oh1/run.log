@@ -1,0 +1,12 @@
+== before 05:20:54
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 1484.94it/s]
+{'model': 'mlx-community/Qwen3-4B-4bit', 'adapter': None, 'n': 51, 'exact_match': 0.0, 'json_valid': 1.0, 'field_match': 0.0873440285204991}
+== train 05:23:02
+Calling `python -m mlx_lm.lora...` directly is deprecated. Use `mlx_lm.lora...` or `python -m mlx_lm lora ...` instead.
+Loading pretrained model
+Fetching 9 files:   0%|          | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|██████████| 9/9 [00:00<00:00, 1297.21it/s]
+Loading datasets
+Training
+Trainable parameters: 0.182% (7.340M/4022.468M)
+Starting training..., iters: 300
+Calculating loss...:   0%|          | 0/12 [00:00<?, ?it/s]Calculating loss...:   8%|▊         | 1/12 [00:01<00:20,  1.82s/it]Calculating loss...:  17%|█▋        | 2/12 [00:02<00:14,  1.43s/it]Calculating loss...:  25%|██▌       | 3/12 [00:04<00:12,  1.43s/it]Calculating loss...:  33%|███▎      | 4/12 [00:06<00:12,  1.51s/it]Calculating loss...:  42%|████▏     | 5/12 [00:07<00:10,  1.54s/it]Calculating loss...:  50%|█████     | 6/12 [00:09<00:10,  1.69s/it]Calculating loss...:  58%|█████▊    | 7/12 [00:10<00:07,  1.58s/it]

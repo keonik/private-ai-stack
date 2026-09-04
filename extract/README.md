@@ -107,6 +107,44 @@ Field names in the schema description matter: adding "ACDA, speed, licence and i
 alcohol" is what let the 27B explain the distinction in its evidence on all 13.
 
 
+## Cross-check against a rule-based parser (free ground truth)
+
+The same 501 PDFs are processed by a separate, hand-written OH-1 parser (regexes over pdf.js text,
+maintained in another repo for a different product). `scripts/gameplan_dump.ts` runs that parser over
+the files and `scripts/compare_gameplan.py` scores the sidecars against it, field by field:
+
+| field | agree | of | note |
+|---|---|---|---|
+| report_number | 501 | 501 | |
+| crash date | 501 | 501 | |
+| crash date + time | 501 | 501 | LLM writes Ohio wall clock; parser stores UTC — compared after conversion |
+| county_code | 501 | 501 | |
+| officer_name | 500 | 501 | the one miss is a dropped letter in a surname (LLM "Chiacchero", form "Chiacchiero") |
+
+The parser reads coded boxes the LLM deliberately does not (see the coded-box limitation above), which
+makes two booleans a comparison of *narrative* against *form*, not LLM against truth:
+
+| | LLM true, form true | LLM true, form false | LLM false, form true |
+|---|---|---|---|
+| animal (narrative vs unit-in-error = 98 "deer") | 24 | 6 | 0 |
+| injury (narrative vs any unit severity < 5) | 37 | 2 | 103 |
+
+All six animal "extras" are correct readings of the narrative: a deer struck with the driver at fault, a
+rear-end after the car ahead braked for an animal, three "swerved to avoid a deer" run-offs, and one
+where the form coded the animal as unit 99. The 103 injury "misses" are the point made earlier from the
+other side: the narrative rarely says "injured", the severity box does, and a chunk-and-prompt
+extractor only sees the narrative. If a customer's question is "which crashes had injuries", the answer
+must come from the form's coded fields, and this is the measurement that proves it. The two injury
+extras are narratives that mention a transport to hospital where the officer coded no injury.
+
+Reproduce (the parser repo path is an env var; it is not part of this repo):
+
+```bash
+ls ../stack/data/inbox/oh1-*.pdf | sed 's|.*/oh1-2026-08-03-|$REPORTS/|' \
+  | xargs bun run scripts/gameplan_dump.ts > gameplan.jsonl      # 501 files, ~50 s
+python scripts/compare_gameplan.py gameplan.jsonl ../stack/data/inbox
+```
+
 ## Add a document type
 
 Add a Pydantic model to `schemas.py` using the `F[...]` field wrapper, register

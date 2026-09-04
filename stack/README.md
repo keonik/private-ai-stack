@@ -35,7 +35,11 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 | Drop documents in | copy into `data/inbox/` — `rag-ingest` watches it; or `curl -X POST :8088/ingest` |
 | Ask with citations | `curl -X POST :8088/query -H 'content-type: application/json' -d '{"question":"..."}'` |
 | Let the chat UI use retrieval | Open WebUI → Admin → Tools → add OpenAPI server `http://rag-ingest:8080` |
-| Backup / restore | `./scripts/backup.sh` → `backups/<ts>.tar.gz`; `./scripts/restore.sh backups/<ts>.tar.gz` |
+| Backup / restore | `./scripts/backup.sh` → `backups/<ts>.tar.gz` (keeps the newest `KEEP=7`); `./scripts/restore.sh backups/<ts>.tar.gz` |
+| Nightly backup + auto-restart after Docker restarts | `./scripts/install-launchd.sh` (macOS; see "Keeping it up") |
+| Remove a document | delete it from `data/inbox/` — its chunks and sidecar go with it (see "Removing documents") |
+| Restrict which users see which documents | `data/acl.json` + three headers on the tool-server connection (see "Per-group document scoping") |
+| Measure retrieval on your own corpus | `python3 scripts/rag_eval.py` (see "Retrieval evaluation") |
 
 ## What's audited
 
@@ -49,7 +53,9 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 - [ ] Replace the master key in Open WebUI with a per-app virtual key
 - [ ] Put :3000 behind TLS (Caddy / your tunnel); don't expose :4000 or :8088 publicly
 - [ ] Full-disk encryption on the host
-- [ ] Run `backup.sh` on a schedule (restore round-trip verified: wiped index + audit log + DB all came back)
+- [x] Run `backup.sh` on a schedule (`install-launchd.sh`: 03:15 nightly, 7 kept; restore round-trip verified: wiped index + audit log + DB all came back)
+- [ ] Identity in front of the tunnel (Cloudflare Access or equivalent) so the login form is not the only thing between the internet and the documents
+- [ ] `data/acl.json` if more than one group of people will use the chat
 - [ ] Read `../docs/phi-pattern.md` if the documents are regulated
 
 ## Backends: oMLX and Ollama, both wired
@@ -192,6 +198,93 @@ and "what happened in the Ravenna crash" to `/query`.
 
 The sidecar contract is deliberately tiny so any extractor can produce one: `{"source": "<filename>",
 "fields": {...}, "review": [...]}`.
+
+## Removing documents
+
+Delete the file from `data/inbox/`. The watcher sees the removal (polling, so it works on macOS bind
+mounts too) and drops every chunk with that source name; the sidecar, if any, is forgotten on its next
+reload. Re-saving a file with new content replaces its old chunks rather than adding to them. `POST /ingest`
+also reconciles: anything indexed whose file is gone is removed, and the same sweep runs at startup, so a
+file deleted while the service was down is still cleaned up. Each removal is audited (`remove`, with
+`reason: deleted|missing`).
+
+Verified: add a text file with a made-up word → it is the top hit in ~5 s; delete it → gone in ~5 s;
+overwrite a file → only the new wording is found.
+
+## Per-group document scoping
+
+Single-tenant by default: with no `data/acl.json` every caller sees every document. Create the file and
+the service scopes `/search`, `/query`, `/documents` and `/fields` by the caller's Open WebUI groups:
+
+```json
+{"admin_all": true,
+ "default": [],
+ "groups": {"claims": ["oh1-*"], "legal": ["*-msa.txt", "contracts/*"]}}
+```
+
+Globs match source filenames, case-insensitively. A caller's allowed set is `default` plus the patterns
+of every group they belong to; admins see everything unless `admin_all` is false. Filters and ACL
+compose: a filtered `/documents` call only lists matches the caller may see, and `/fields` only shows
+example values from those documents. The file is re-read whenever its mtime changes.
+
+Who is calling comes from headers Open WebUI adds to the connection. Admin Panel → Settings → Tools →
+the rag-ingest connection → Headers:
+
+```
+X-User-Id: {{USER_ID}}
+X-User-Role: {{USER_ROLE}}
+X-User-Groups: {{USER_GROUPS}}
+```
+
+These placeholders are filled server-side per request (Open WebUI 0.11: `utils/headers.py`), with no
+env change; `ENABLE_FORWARD_USER_INFO_HEADERS` is not needed. Groups are Admin Panel → Users → Groups.
+The headers are unsigned, which is fine on the compose network where only Open WebUI can reach
+`rag-ingest:8080`; do not publish :8088. Calls with no headers (curl from the host) get `default` only,
+so pass `X-User-Role: admin` for operator use.
+
+Verified with a temporary ACL: no headers → nothing; `legal` → only the MSA; `claims` → the 501 crash
+reports and 30 animal matches; `admin` → everything; file removed → unrestricted again.
+
+## Keeping it up
+
+`./scripts/install-launchd.sh` installs two user agents (templates in `launchd/`):
+
+- `dev.private-ai-stack.backup` — `backup.sh` at 03:15, keeps 7 tarballs (`KEEP`). One run of the
+  current data set is ~500 MB. Log: `~/Library/Logs/private-ai-stack.backup.log`.
+- `dev.private-ai-stack.keepalive` — every 5 min, `docker compose up -d` if any service is not
+  running. It does nothing when Docker itself is down (stopping Docker is a person's decision, not
+  a script's). Verified by stopping a service by hand: back within one tick.
+
+`./scripts/install-launchd.sh remove` uninstalls both.
+
+## Retrieval evaluation
+
+`scripts/rag_eval.py` builds a golden set from the sidecars — one question per sampled document,
+written by `local/chat-small` from that document's summary with the report number withheld — caches
+it under `data/eval/`, then asks `/search` in each mode and checks whether the target document is in
+the top k (ranked by document, not chunk). 60 questions per set, 501-document corpus, k = 10:
+
+| mode | recall@1 | recall@5 | recall@10 | MRR |
+|---|---|---|---|---|
+| vector only | 0.47 / 0.57 | 0.55 / 0.72 | 0.62 / 0.75 | 0.51 / 0.63 |
+| BM25 only | 0.62 / 0.63 | 0.87 / 0.87 | 0.90 / 0.90 | 0.71 / 0.74 |
+| hybrid, lexical weight 1 | 0.60 / 0.60 | 0.77 / 0.78 | 0.88 / 0.92 | 0.67 / 0.70 |
+| hybrid, lexical weight 3 (now default) | 0.65 / 0.65 | 0.82 / 0.83 | 0.88 / 0.90 | 0.73 / 0.73 |
+
+Two numbers per cell: the set the weight was chosen on (seed 0) / a second set generated afterwards
+(seed 1). Median search latency is ~70 ms in every mode.
+
+What it says: on a corpus of 501 near-identical forms from the same day, what tells documents apart is
+proper nouns — street names, townships, "parked trailers" — and BM25 is built for exactly that, while
+embeddings blur "a Columbus rear-end collision" into a hundred neighbours. Plain reciprocal-rank fusion
+let the weak vector list drag the good lexical list down. Weighting the lexical list 3× (`BM25_WEIGHT`,
+or `bm25_weight=` per call) recovers BM25's recall while keeping the vector list for paraphrases, and
+the second set shows it was not fitted to the first. On the prose corpus in `../rag` the same knob
+should sit nearer 1; it is an env var for that reason, not a constant.
+
+The ceiling is real, too: many questions ("Columbus collision Unit 1 Unit 2") are genuinely ambiguous
+among same-day Columbus crashes, so ~0.9 recall@10 is close to what the questions allow, and the
+misses are the same handful of generic questions in every mode.
 
 ## Thinking models
 
