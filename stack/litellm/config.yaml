@@ -75,19 +75,23 @@ model_list:
     litellm_params: { model: openai/qwen3-asr-1.7b-8bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: audio_transcription }
 
-  # ---------------- Ollama (Linux primary / Mac fallback) ----------------
-  - model_name: ollama/chat
-    litellm_params:
-      model: ollama_chat/qwen3:8b
-      api_base: os.environ/OLLAMA_BASE_URL
-  - model_name: ollama/chat-small
-    litellm_params:
-      model: ollama_chat/qwen3:4b
-      api_base: os.environ/OLLAMA_BASE_URL
-  - model_name: ollama/embed
-    litellm_params:
-      model: ollama/nomic-embed-text
-      api_base: os.environ/OLLAMA_BASE_URL
+  # ---------------- Ollama (Linux primary / portability) ----------------
+  # Commented out rather than deleted: this router is public on the reference Mac, where Ollama was
+  # retired, and a listed model that cannot answer is worse than one that is absent. On a host that
+  # runs Ollama (see the `linux` compose profile) uncomment these and set OLLAMA_BASE_URL. The point
+  # of the aliases stands either way — swapping backend is a change here, not in any client.
+  # - model_name: ollama/chat
+  #   litellm_params:
+  #     model: ollama_chat/qwen3:8b
+  #     api_base: os.environ/OLLAMA_BASE_URL
+  # - model_name: ollama/chat-small
+  #   litellm_params:
+  #     model: ollama_chat/qwen3:4b
+  #     api_base: os.environ/OLLAMA_BASE_URL
+  # - model_name: ollama/embed
+  #   litellm_params:
+  #     model: ollama/nomic-embed-text
+  #     api_base: os.environ/OLLAMA_BASE_URL
 
 router_settings:
   routing_strategy: simple-shuffle

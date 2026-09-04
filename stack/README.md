@@ -63,8 +63,11 @@ open http://localhost:3000                 # first signup = admin; then set ENAB
 
 `litellm/config.yaml` routes the friendly names (`local/chat`, `local/embed`, …)
 to **oMLX** — an OpenAI-compatible MLX server on the Mac host, which also serves
-vision, STT and TTS — and keeps **Ollama** under `ollama/*` as the Linux primary
-and Mac fallback. Switching the whole stack from one to the other was the edit
+vision, STT and TTS. The **Ollama** routes under `ollama/*` are present but
+commented out: on the reference Mac Ollama was retired, and this router is
+reachable from the internet, where a listed model that cannot answer is worse
+than one that is absent. On a Linux host (the `linux` compose profile) uncomment
+them and set `OLLAMA_BASE_URL`. Switching the whole stack from one to the other was the edit
 of one file plus `docker compose up -d litellm`; Open WebUI, rag-ingest and the
 extraction service never changed. That is the point of the router.
 
