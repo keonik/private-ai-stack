@@ -36,6 +36,45 @@ model_list:
       api_base: os.environ/OMLX_BASE_URL
       api_key: os.environ/OMLX_API_KEY
 
+  # Everything else oMLX serves, under its own name, so a client that already calls the engine
+  # directly keeps working when the public gateway is pointed at this router instead.
+  - model_name: gpt-oss-20b-mlx
+    litellm_params: { model: openai/gpt-oss-20b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: qwen3.8-27b-mtplx
+    litellm_params: { model: openai/qwen3.8-27b-mtplx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: Qwen3.8-27B-4bit
+    litellm_params: { model: openai/Qwen3.8-27B-4bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: gemma4-e4b-mlx
+    litellm_params: { model: openai/gemma4-e4b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: qwen3.8-27b-coder
+    litellm_params: { model: openai/qwen3.8-27b-coder, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: embeddinggemma-300m
+    litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: embedding }
+
+  # Speech. mode lets `/health` check them correctly instead of sending a chat probe.
+  - model_name: local/tts
+    litellm_params: { model: openai/kokoro-tts, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: kokoro-tts
+    litellm_params: { model: openai/kokoro-tts, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: whisper-turbo
+    litellm_params: { model: openai/whisper-turbo, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_transcription }
+  - model_name: parakeet-v3
+    litellm_params: { model: openai/parakeet-v3, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_transcription }
+  - model_name: parakeet-tdt-0.6b-v2
+    litellm_params: { model: openai/parakeet-tdt-0.6b-v2, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_transcription }
+  - model_name: qwen3-asr-0.6b-8bit
+    litellm_params: { model: openai/qwen3-asr-0.6b-8bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_transcription }
+  - model_name: qwen3-asr-1.7b-8bit
+    litellm_params: { model: openai/qwen3-asr-1.7b-8bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_transcription }
+
   # ---------------- Ollama (Linux primary / Mac fallback) ----------------
   - model_name: ollama/chat
     litellm_params:
