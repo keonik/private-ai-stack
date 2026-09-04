@@ -338,16 +338,61 @@ keepalive agent then include these services, so they come back with everything e
 | piece | what it gives you | where it comes from |
 |---|---|---|
 | Prometheus | 30 days of metrics | scrapes LiteLLM `/metrics/` (with the master key), rag-ingest, the docker-stats exporter, blackbox, itself |
-| blackbox | **is it up** — one probe per service every 15 s, including oMLX on the host | `/health`-style URLs; a 401 from oMLX still counts as up |
-| docker-stats | CPU %, memory, network, restarts per container | 120 lines of stdlib Python over the Docker socket (`observability/docker-stats/exporter.py`) |
+| blackbox | **is it up** — one probe per service every 15 s, for anything on the machine | URLs listed in `internal-targets.json`; a 401 counts as up (it answered) |
+| docker-stats | CPU %, memory, network, restarts for **every container on the machine**, plus what the Docker VM is storing | 150 lines of stdlib Python over the Docker socket (`observability/docker-stats/exporter.py`) |
+| host-metrics | the Mac itself: disk, memory the way Activity Monitor counts it, swap, load | stdlib Python on the host under launchd, because a container sees the Linux VM and not macOS |
 | Loki + Alloy | every container's stdout/stderr, 14 days, searchable by service | Alloy discovers compose containers over the socket |
 | Grafana | the dashboards and alerts below (port 3001 is open on the LAN like the chat UI, so give `GRAFANA_PASSWORD` a real value); also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
 | alert-relay | turns Grafana's alert JSON into a notification a person can read on a phone | 90 lines of stdlib Python (`observability/alert-relay/relay.py`) |
 
+## Adding another service
+
+Three tiers, and the first two need no changes to the service at all.
+
+**Logs: already done.** Alloy watches the Docker socket with no filter, so every container on this machine
+ships its logs to Loki the moment it starts. Search them in Grafana with `{container="my-app"}`. Same for
+container CPU, memory, network and restarts — `docker-stats` reports every project, and
+`DOCKER_STATS_PROJECT` narrows it if you ever want only one.
+
+**Up/down and alerting: one line.** Add an entry to `observability/prometheus/internal-targets.json`
+(gitignored; copy `internal-targets.example.json` on a fresh clone):
+
+```json
+{ "targets": ["http://host.docker.internal:8080/"], "labels": { "name": "recto", "kind": "other-app" } }
+```
+
+`name` is what the tile says. Use `host.docker.internal` for anything running on the Mac rather than in
+this compose project, and the compose service name for anything inside it. Prometheus re-reads the file
+within a minute, a tile appears on the overview dashboard, and the "Service down" alert covers it.
+Add `"alert": "false"` to the labels to watch something without it ever waking you — a dev copy, say.
+
+The reference machine currently probes the four stack services plus four unrelated apps (an OCR service,
+two gateways and an API) and one dev instance that is watched but never alerts. Nine tiles, one file.
+
+**Real metrics: needs the app to expose them.** If a service publishes Prometheus metrics, add a scrape
+job to `observability/prometheus/prometheus.tpl.yml` pointing at it, and build panels from there. That is
+the only tier that requires touching the application.
+
+## The Mac itself
+
+A container on macOS sees the Linux VM Docker runs in, not the Mac, so disk and memory for the machine
+come from `observability/host-metrics/exporter.py`, which runs on the host under launchd (installed by
+`install-launchd.sh` along with the other agents) and serves `:9419`.
+
+The "The Mac" dashboard row shows disk used and free, memory, swap, load per core, and how much disk the
+Docker VM is spending on images. Memory follows Activity Monitor's definition — app plus wired plus
+compressed, with file cache counted separately — because macOS keeps nearly all RAM occupied by cache and
+"total minus free" would sit at 96% forever and mean nothing. On the reference machine it reads about
+105 GB of 137 GB, which is the models held in memory, with no swap in use.
+
+Three alerts come with it: disk over 90% for 10 minutes (critical — a full boot volume stops everything
+on the machine), sustained swap use, and the exporter itself going quiet.
+
 **Dashboards** (`observability/grafana/build_dashboards.py` generates the JSON; edit the Python, not the JSON):
 
-- *Overview* — up/down tiles; requests per minute, p50/p95 latency, tokens per minute and failures by model
-  from LiteLLM's live counters; **time to first token** per model, requests per hour, spend per day and a
+- *Overview* — one up/down tile per probed service, generated from the targets file rather than hardcoded;
+  public endpoints; the Mac's disk, memory and load; requests per minute, p50/p95 latency, tokens per
+  minute and failures by model from LiteLLM's live counters; **time to first token** per model, requests per hour, spend per day and a
   who-used-what table from the spend log; CPU, memory and network per container; an error/warning log
   panel across the stack.
 - *RAG service* — index size, ingest errors, search/query p95, requests by endpoint, embedding latency
@@ -364,6 +409,10 @@ keepalive agent then include these services, so they come back with everything e
 | Document ingest errors | any file fails to index |
 | Container restarting | more than 2 restarts in an hour |
 | Container memory above 85 % of the Docker VM | for 5 min (that is the colima / Docker Desktop VM, not the Mac) |
+| Public hostname unreachable | a tunnel hostname fails from the internet for 5 min |
+| Disk almost full on the Mac | over 90 % for 10 min |
+| The Mac is swapping | over 8 GB of swap for 15 min |
+| Host metrics exporter down | no disk or memory readings for 10 min |
 
 All six go to one contact point, which posts to **alert-relay**. Grafana's own webhook payload is a JSON
 envelope that a phone would display verbatim, so the relay unwraps it and sends one short notification per

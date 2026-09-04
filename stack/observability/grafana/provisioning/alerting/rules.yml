@@ -17,7 +17,7 @@
      },
      "annotations": {
       "summary": "{{ $labels.service }} is not answering its health endpoint",
-      "description": "Probed every 15 s by blackbox. oMLX is probed on the host at :8002."
+      "description": "Probed every 15 s by blackbox. Targets live in observability/prometheus/internal-targets.json; an entry with alert:\"false\" is watched on the dashboard but never alerts."
      },
      "data": [
       {
@@ -29,7 +29,7 @@
        "datasourceUid": "prom",
        "model": {
         "refId": "A",
-        "expr": "min by (service) (probe_success)",
+        "expr": "min by (service) (probe_success{job=\"probes\", alert!=\"false\"})",
         "instant": true,
         "intervalMs": 15000,
         "maxDataPoints": 100
@@ -368,6 +368,198 @@
            "type": "gt",
            "params": [
             2
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-disk",
+     "title": "Disk almost full on the Mac",
+     "condition": "C",
+     "for": "10m",
+     "labels": {
+      "severity": "critical"
+     },
+     "annotations": {
+      "summary": "The Mac's disk is {{ $values.A.Value | humanizePercentage }} full",
+      "description": "Everything on this machine stops when the boot volume fills: models, Docker, backups. `docker system prune` and stack/backups are the usual places to reclaim space."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "max(host_disk_used_ratio)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0.9
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-swap",
+     "title": "The Mac is swapping",
+     "condition": "C",
+     "for": "15m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "Swap in use is {{ $values.A.Value | humanize1024 }}B",
+      "description": "A machine serving models should not swap. Something is over-committed: check the Memory panel and which models are loaded."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "host_swap_used_bytes",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            8000000000.0
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-host-metrics-down",
+     "title": "Host metrics exporter down",
+     "condition": "C",
+     "for": "10m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "No disk or memory readings from the Mac",
+      "description": "launchctl list | grep host-metrics; the agent is dev.private-ai-stack.host-metrics."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "up{job=\"host\"}",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "lt",
+           "params": [
+            1
            ]
           },
           "operator": {

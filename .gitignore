@@ -28,3 +28,4 @@ stack/observability/prometheus/public-targets.json
 *.swp
 *.swo
 *~
+stack/observability/prometheus/internal-targets.json

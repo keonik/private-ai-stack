@@ -1,0 +1,57 @@
+[
+ {
+  "targets": [
+   "http://litellm:4000/health/liveliness"
+  ],
+  "labels": {
+   "name": "litellm",
+   "kind": "stack"
+  }
+ },
+ {
+  "targets": [
+   "http://open-webui:8080/health"
+  ],
+  "labels": {
+   "name": "open-webui",
+   "kind": "stack"
+  }
+ },
+ {
+  "targets": [
+   "http://rag-ingest:8080/health"
+  ],
+  "labels": {
+   "name": "rag-ingest",
+   "kind": "stack"
+  }
+ },
+ {
+  "targets": [
+   "http://host.docker.internal:8002/v1/models"
+  ],
+  "labels": {
+   "name": "oMLX",
+   "kind": "stack"
+  }
+ },
+ {
+  "targets": [
+   "http://host.docker.internal:8080/"
+  ],
+  "labels": {
+   "name": "my-other-app",
+   "kind": "other-app"
+  }
+ },
+ {
+  "targets": [
+   "http://host.docker.internal:8090/"
+  ],
+  "labels": {
+   "name": "my-dev-copy",
+   "kind": "dev",
+   "alert": "false"
+  }
+ }
+]

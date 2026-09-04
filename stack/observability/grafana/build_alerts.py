@@ -26,9 +26,10 @@ def rule(uid, title, expr, op, thr, for_, severity, summary, desc=""):
 
 
 RULES = [
-    rule("pas-service-down", "Service down", "min by (service) (probe_success)", "lt", 1, "2m", "critical",
+    rule("pas-service-down", "Service down", 'min by (service) (probe_success{job="probes", alert!="false"})', "lt", 1, "2m", "critical",
          "{{ $labels.service }} is not answering its health endpoint",
-         "Probed every 15 s by blackbox. oMLX is probed on the host at :8002."),
+         "Probed every 15 s by blackbox. Targets live in observability/prometheus/internal-targets.json; an entry "
+         "with alert:\"false\" is watched on the dashboard but never alerts."),
     rule("pas-public-down", "Public hostname unreachable", 'min by (service) (probe_success{job="public"})', "lt", 1, "5m", "critical",
          "{{ $labels.service }} cannot be reached from the internet",
          "The service itself may be fine: this is the tunnel, DNS or the proxy in front of it. A Cloudflare Access "
@@ -46,6 +47,17 @@ RULES = [
     rule("pas-restarts", "Container restarting", "max by (service) (clamp_min(increase(container_restarts_total[1h]), 0))", "gt", 2, "0s", "warning",
          "{{ $labels.service }} restarted {{ $values.A.Value | printf \"%.0f\" }} times in the last hour",
          "docker compose logs <service>"),
+    rule("pas-disk", "Disk almost full on the Mac", "max(host_disk_used_ratio)", "gt", 0.9, "10m", "critical",
+         "The Mac's disk is {{ $values.A.Value | humanizePercentage }} full",
+         "Everything on this machine stops when the boot volume fills: models, Docker, backups. `docker system prune` "
+         "and stack/backups are the usual places to reclaim space."),
+    rule("pas-swap", "The Mac is swapping", "host_swap_used_bytes", "gt", 8e9, "15m", "warning",
+         "Swap in use is {{ $values.A.Value | humanize1024 }}B",
+         "A machine serving models should not swap. Something is over-committed: check the Memory panel and which "
+         "models are loaded."),
+    rule("pas-host-metrics-down", "Host metrics exporter down", "up{job=\"host\"}", "lt", 1, "10m", "warning",
+         "No disk or memory readings from the Mac",
+         "launchctl list | grep host-metrics; the agent is dev.private-ai-stack.host-metrics."),
     rule("pas-memory", "Container memory above 85% of the Docker VM", "sum(container_memory_bytes) / max(container_memory_limit_bytes)", "gt", 0.85, "5m", "warning",
          "Containers use {{ $values.A.Value | humanizePercentage }} of the Docker memory limit",
          "On macOS this is the colima / Docker Desktop VM, not the Mac. Raise the VM memory or trim services."),

@@ -5,7 +5,10 @@ over the unix socket. Standard library only, so it behaves the same under colima
 Metrics (label service = compose service name, container = container name):
   container_running, container_cpu_percent, container_memory_bytes, container_memory_limit_bytes,
   container_network_receive_bytes_total, container_network_transmit_bytes_total, container_restarts_total,
-  container_started_seconds
+  container_started_seconds, plus docker_disk_*_bytes for what the engine is storing.
+
+COMPOSE_PROJECT empty (the default) reports every container on the machine, so anything else you run
+here shows up without configuration. Set it to a project name to narrow the view.
 """
 from __future__ import annotations
 
@@ -50,7 +53,8 @@ def collect() -> list[str]:
             continue
         service = labels.get("com.docker.compose.service") or ctr["Names"][0].lstrip("/")
         name = ctr["Names"][0].lstrip("/")
-        lb = f'service="{service}",container="{name}"'
+        project = labels.get("com.docker.compose.project", "")
+        lb = f'service="{service}",container="{name}",project="{project}"'
         running = 1 if ctr.get("State") == "running" else 0
         out.append(f"container_running{{{lb}}} {running}")
         try:
@@ -84,12 +88,33 @@ def collect() -> list[str]:
     return out
 
 
+def disk_usage():
+    """docker system df: what the engine is storing. Slower than the rest, so it runs every few minutes."""
+    d = api("/system/df")
+    if not d:
+        return []
+    return [
+        "docker_disk_images_bytes %d" % (d.get("LayersSize") or 0),
+        "docker_disk_containers_bytes %d" % sum(c.get("SizeRw") or 0 for c in (d.get("Containers") or [])),
+        "docker_disk_volumes_bytes %d" % sum((v.get("UsageData") or {}).get("Size") or 0 for v in (d.get("Volumes") or [])),
+        "docker_disk_build_cache_bytes %d" % sum(b.get("Size") or 0 for b in (d.get("BuildCache") or [])),
+    ]
+
+
 def loop():
     global _lines
+    df = []
+    n = 0
     while True:
         t0 = time.time()
         try:
-            lines = collect()
+            if n % 10 == 0:  # ~every 2.5 minutes at the default interval
+                try:
+                    df = disk_usage()
+                except Exception:
+                    pass
+            n += 1
+            lines = collect() + df
             lines.append(f"docker_stats_scrape_seconds {time.time() - t0:.2f}")
             with _lock:
                 _lines = lines

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.private-ai-stack.host-metrics</string>
+  <key>ProgramArguments</key><array>
+    <string>/usr/bin/python3</string>
+    <string>__STACK__/observability/host-metrics/exporter.py</string>
+  </array>
+  <key>WorkingDirectory</key><string>__STACK__</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PORT</key><string>9419</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/private-ai-stack.host-metrics.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/private-ai-stack.host-metrics.log</string>
+</dict></plist>

@@ -161,7 +161,8 @@ services:
     restart: unless-stopped
     command: ["python", "/exporter.py"]
     environment:
-      COMPOSE_PROJECT: private-ai-stack
+      # Empty = every container on the machine, not just this stack. Set a project name to narrow it.
+      COMPOSE_PROJECT: ${DOCKER_STATS_PROJECT:-}
     volumes:
       - ./observability/docker-stats/exporter.py:/exporter.py:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

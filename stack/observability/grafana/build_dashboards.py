@@ -85,48 +85,82 @@ def dashboard(uid, title, panels, tags, refresh="30s", frm="now-6h"):
 
 
 # ------------------------------------------------------------------ overview
+# Layout uses a running y cursor so panels can be added or reordered without renumbering everything.
 P = []
-P.append(row("Is it up", 0))
-for i, (svc, label) in enumerate([("litellm", "LiteLLM (router)"), ("open-webui", "Open WebUI (chat)"), ("rag-ingest", "rag-ingest (documents)"), ("host.docker.internal", "oMLX (models, on the host)")]):
-    P.append(stat(label, f'min(probe_success{{service="{svc}"}})', (i * 5, 1, 5, 3), mappings=UPDOWN, thresholds=RED_GREEN))
-P.append(stat("Restarts (24h)", "clamp_min(sum(increase(container_restarts_total[24h])), 0) or vector(0)", (20, 1, 4, 3),
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}, decimals=0))
+_y = [0]
 
-P.append(row("Model traffic (LiteLLM /metrics)", 4))
-P.append(ts("Requests per minute, by model", ['sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total{route=~"/v1/.*|/chat/.*|/embeddings"}[5m])) * 60'], (0, 5, 8, 8), "reqpm", legend="{{requested_model}}", stack=True))
-P.append(ts("Latency p50 / p95, chat models", ['histogram_quantile(0.5, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{requested_model!~".*embed.*"}[10m])))',
-                                                {"expr": 'histogram_quantile(0.95, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{requested_model!~".*embed.*"}[10m])))', "legendFormat": "p95 {{requested_model}}"}],
-            (8, 5, 8, 8), "s", legend="p50 {{requested_model}}", desc="End-to-end request time through the router (includes queueing and generation)."))
-P.append(ts("Tokens per minute", [{"expr": "sum(rate(litellm_input_tokens_metric_total[5m])) * 60", "legendFormat": "input"},
-                                  {"expr": "sum(rate(litellm_output_tokens_metric_total[5m])) * 60", "legendFormat": "output"}], (16, 5, 8, 8), "short", stack=True))
-P.append(ts("Failed requests per minute", ['sum by (requested_model, exception_class) (rate(litellm_proxy_failed_requests_metric_total[5m])) * 60 or vector(0)'], (0, 13, 8, 6), "reqpm", legend="{{requested_model}} {{exception_class}}"))
-P.append(ts("In flight", ["litellm_in_flight_requests"], (8, 13, 8, 6), "short", legend="requests"))
-P.append(ts("Seconds per output token (deployment)", ['sum by (model) (rate(litellm_deployment_latency_per_output_token_sum[10m])) / sum by (model) (rate(litellm_deployment_latency_per_output_token_count[10m]))'], (16, 13, 8, 6), "s", legend="{{model}}", desc="Generation speed per backend model. Rising = the box is busy or thermally throttled."))
 
-P.append(row("History and spend (LiteLLM spend log in Postgres)", 19))
-P.append(ts("Requests per hour, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1h), model_group AS metric, count(*) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], (0, 20, 8, 8), "short", ds=SPEND, stack=True))
-P.append(ts("Time to first token p50, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1h), model_group AS metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM ("completionStartTime" - "startTime"))) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") AND "completionStartTime" IS NOT NULL AND call_type LIKE \'%completion%\' GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], (8, 20, 8, 8), "s", ds=SPEND, desc="How long a user waits before the first word appears. The number people feel."))
-P.append(ts("Spend per day, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1d), model_group AS metric, sum(spend) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], (16, 20, 8, 8), "currencyUSD", ds=SPEND, stack=True, desc="Local models cost 0 unless you set prices in litellm/config.yaml; cloud fallbacks show real cost here."))
-P.append(table_sql("Who used what (selected range)", 'SELECT coalesce(nullif(metadata->>\'user_api_key_alias\', \'\'), left(api_key, 12)) AS key, model_group AS model, count(*) AS requests, sum(total_tokens) AS tokens, round(sum(spend)::numeric, 4) AS spend, round(avg(extract(epoch FROM ("endTime" - "startTime")))::numeric, 1) AS avg_s FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY tokens DESC LIMIT 25', (0, 28, 24, 8)))
+def at(w, h, x=0):
+    return (x, _y[0], w, h)
 
-P.append(row("Containers (docker-stats exporter)", 36))
-P.append(ts("CPU %, by service", ["container_cpu_percent"], (0, 37, 8, 7), "percent", legend="{{service}}"))
-P.append(ts("Memory, by service", ["container_memory_bytes"], (8, 37, 8, 7), "bytes", legend="{{service}}", stack=True))
-P.append(ts("Network in / out", [{"expr": "sum by (service) (rate(container_network_receive_bytes_total[5m]))", "legendFormat": "rx {{service}}"},
-                                 {"expr": "- sum by (service) (rate(container_network_transmit_bytes_total[5m]))", "legendFormat": "tx {{service}}"}], (16, 37, 8, 7), "Bps", min0=False))
 
-P.append(row("Logs (Loki)", 44))
-P.append(logs("Errors and warnings across the stack", '{service=~"litellm|open-webui|rag-ingest|postgres"} |~ "(?i)(error|warn|traceback|exception)" != "GET /metrics"', (0, 45, 24, 10)))
-# Public endpoints (the tunnel, probed from outside) go directly under the up/down tiles.
-for _p in P:
-    if _p["gridPos"]["y"] >= 4:
-        _p["gridPos"]["y"] += 4
-P.append(row("Reachable from the internet", 4))
-P.append(stat("Public endpoints", 'min by (service) (probe_success{job="public"})', (0, 5, 24, 3), mappings=UPDOWN,
+def down(h):
+    _y[0] += h
+
+
+P.append(row("Is it up", _y[0])); down(1)
+P.append(stat("Services", 'min by (service) (probe_success{job="probes", alert!="false"})', at(20, 4), mappings=UPDOWN,
+              thresholds=RED_GREEN, legend="{{service}}",
+              desc="One tile per entry in observability/prometheus/internal-targets.json. Add a service there and it "
+                   "appears here; set alert:\"false\" on an entry to watch it without waking anyone."))
+P.append(stat("Restarts (24h)", "clamp_min(sum(increase(container_restarts_total[24h])), 0) or vector(0)", at(4, 4, 20),
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]},
+              decimals=0)); down(4)
+
+P.append(row("Reachable from the internet", _y[0])); down(1)
+P.append(stat("Public endpoints", 'min by (service) (probe_success{job="public"})', at(24, 3), mappings=UPDOWN,
               thresholds=RED_GREEN, legend="{{service}}",
               desc="Each hostname in observability/prometheus/public-targets.json, fetched over the internet every 15 s. "
                    "DOWN here with the service UP above means the tunnel is broken, not the app. A Cloudflare Access "
-                   "login page still counts as UP."))
+                   "login page still counts as UP.")); down(3)
+
+P.append(row("The Mac", _y[0])); down(1)
+PCT = {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 80}, {"color": "red", "value": 90}]}
+P.append(stat("Disk used", "max(host_disk_used_ratio) * 100", at(4, 4, 0), "percent", thresholds=PCT, decimals=0,
+              desc="The Mac's boot volume. Everything stops when this fills, so it is the first tile to look at."))
+P.append(stat("Disk free", "min(host_disk_free_bytes)", at(4, 4, 4), "bytes", decimals=0))
+P.append(stat("Memory used", "host_memory_used_bytes / host_memory_total_bytes * 100", at(4, 4, 8), "percent", thresholds=PCT, decimals=0,
+              desc="App + wired + compressed, the way Activity Monitor counts it. File cache is excluded, so this stays "
+                   "meaningful; a large model held in memory shows up here."))
+P.append(stat("Swap used", "host_swap_used_bytes", at(4, 4, 12), "bytes", decimals=1,
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 2e9}, {"color": "red", "value": 8e9}]},
+              desc="Swapping on a machine serving models is the clearest sign it is over-committed."))
+P.append(stat("Load per core", "host_load1 / host_cpus", at(4, 4, 16), "short", decimals=2,
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 2}]}))
+P.append(stat("Docker images on disk", "docker_disk_images_bytes", at(4, 4, 20), "bytes", decimals=1,
+              desc="Inside the Docker VM. `docker system prune` reclaims it.")); down(4)
+P.append(ts("Disk free on the Mac", ["host_disk_free_bytes"], at(8, 7, 0), "bytes", legend="{{mount}}"))
+P.append(ts("Memory", [{"expr": "host_memory_used_bytes", "legendFormat": "used"},
+                       {"expr": "host_memory_cached_bytes", "legendFormat": "cache"},
+                       {"expr": "host_memory_free_bytes", "legendFormat": "free"}], at(8, 7, 8), "bytes", stack=True))
+P.append(ts("Load average", [{"expr": "host_load1", "legendFormat": "1m"}, {"expr": "host_load5", "legendFormat": "5m"},
+                             {"expr": "host_load15", "legendFormat": "15m"}], at(8, 7, 16), "short")); down(7)
+
+P.append(row("Model traffic (LiteLLM /metrics)", _y[0])); down(1)
+P.append(ts("Requests per minute, by model", ['sum by (requested_model) (rate(litellm_proxy_total_requests_metric_total{route=~"/v1/.*|/chat/.*|/embeddings"}[5m])) * 60'], at(8, 8, 0), "reqpm", legend="{{requested_model}}", stack=True))
+P.append(ts("Latency p50 / p95, chat models", ['histogram_quantile(0.5, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{requested_model!~".*embed.*"}[10m])))',
+                                                {"expr": 'histogram_quantile(0.95, sum by (le, requested_model) (rate(litellm_request_total_latency_metric_bucket{requested_model!~".*embed.*"}[10m])))', "legendFormat": "p95 {{requested_model}}"}],
+            at(8, 8, 8), "s", legend="p50 {{requested_model}}", desc="End-to-end request time through the router (includes queueing and generation)."))
+P.append(ts("Tokens per minute", [{"expr": "sum(rate(litellm_input_tokens_metric_total[5m])) * 60", "legendFormat": "input"},
+                                  {"expr": "sum(rate(litellm_output_tokens_metric_total[5m])) * 60", "legendFormat": "output"}], at(8, 8, 16), "short", stack=True)); down(8)
+P.append(ts("Failed requests per minute", ['sum by (requested_model, exception_class) (rate(litellm_proxy_failed_requests_metric_total[5m])) * 60 or vector(0)'], at(8, 6, 0), "reqpm", legend="{{requested_model}} {{exception_class}}"))
+P.append(ts("In flight", ["litellm_in_flight_requests"], at(8, 6, 8), "short", legend="requests"))
+P.append(ts("Seconds per output token (deployment)", ['sum by (model) (rate(litellm_deployment_latency_per_output_token_sum[10m])) / sum by (model) (rate(litellm_deployment_latency_per_output_token_count[10m]))'], at(8, 6, 16), "s", legend="{{model}}", desc="Generation speed per backend model. Rising = the box is busy or thermally throttled.")); down(6)
+
+P.append(row("History and spend (LiteLLM spend log in Postgres)", _y[0])); down(1)
+P.append(ts("Requests per hour, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1h), model_group AS metric, count(*) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], at(8, 8, 0), "short", ds=SPEND, stack=True))
+P.append(ts("Time to first token p50, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1h), model_group AS metric, percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM ("completionStartTime" - "startTime"))) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") AND "completionStartTime" IS NOT NULL AND call_type LIKE \'%completion%\' GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], at(8, 8, 8), "s", ds=SPEND, desc="How long a user waits before the first word appears. The number people feel."))
+P.append(ts("Spend per day, by model group", [{"rawSql": 'SELECT $__timeGroupAlias("startTime", 1d), model_group AS metric, sum(spend) AS value FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY 1', "format": "time_series"}], at(8, 8, 16), "currencyUSD", ds=SPEND, stack=True, desc="Local models cost 0 unless you set prices in litellm/config.yaml; cloud fallbacks show real cost here.")); down(8)
+P.append(table_sql("Who used what (selected range)", 'SELECT coalesce(nullif(metadata->>\'user_api_key_alias\', \'\'), left(api_key, 12)) AS key, model_group AS model, count(*) AS requests, sum(total_tokens) AS tokens, round(sum(spend)::numeric, 4) AS spend, round(avg(extract(epoch FROM ("endTime" - "startTime")))::numeric, 1) AS avg_s FROM "LiteLLM_SpendLogs" WHERE $__timeFilter("startTime") GROUP BY 1, 2 ORDER BY tokens DESC LIMIT 25', at(24, 8, 0))); down(8)
+
+P.append(row("Containers (every project on this machine)", _y[0])); down(1)
+P.append(ts("CPU %, by container", ["container_cpu_percent"], at(8, 7, 0), "percent", legend="{{project}}/{{service}}"))
+P.append(ts("Memory, by container", ["container_memory_bytes"], at(8, 7, 8), "bytes", legend="{{project}}/{{service}}", stack=True))
+P.append(ts("Network in / out", [{"expr": "sum by (service) (rate(container_network_receive_bytes_total[5m]))", "legendFormat": "rx {{service}}"},
+                                 {"expr": "- sum by (service) (rate(container_network_transmit_bytes_total[5m]))", "legendFormat": "tx {{service}}"}], at(8, 7, 16), "Bps", min0=False)); down(7)
+
+P.append(row("Logs (Loki)", _y[0])); down(1)
+P.append(logs("Errors and warnings across every container", '{container=~".+"} |~ "(?i)(error|warn|traceback|exception)" != "GET /metrics"', at(24, 10))); down(10)
 P.sort(key=lambda d: (d["gridPos"]["y"], d["gridPos"]["x"]))
 (OUT / "overview.json").write_text(json.dumps(dashboard("pas-overview", "Private AI stack — overview", P, ["private-ai-stack"]), indent=1))
 

@@ -17,27 +17,36 @@ scrape_configs:
     static_configs: [{ targets: ["loki:3100"] }]
   - job_name: grafana
     static_configs: [{ targets: ["grafana:3000"] }]
-  # "Is it up" probes. A 401 from oMLX still proves the server answers (no key is sent on purpose).
+  # "Is it up" probes for anything on this machine, container or not. Edit internal-targets.json —
+  # one line per URL — and Prometheus picks it up within a minute. A 401 counts as up (it answered).
   - job_name: probes
     metrics_path: /probe
     params: { module: [http_up] }
-    static_configs:
-      - targets:
-          - http://litellm:4000/health/liveliness
-          - http://open-webui:8080/health
-          - http://rag-ingest:8080/health
-          - http://host.docker.internal:8002/v1/models
-        labels: { kind: service }
+    file_sd_configs:
+      - files: ["/etc/prometheus/internal-targets.json"]
+        refresh_interval: 1m
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
+      # `name` from the targets file wins, so a tile says "recto" and not "host.docker.internal"
+      - source_labels: [__param_target]
+        regex: "https?://host\\.docker\\.internal:([0-9]+).*"
+        target_label: port
       - source_labels: [__param_target]
         target_label: instance
       - source_labels: [__param_target]
         regex: "https?://([^:/]+).*"
         target_label: service
+      - source_labels: [name]
+        regex: "(.+)"
+        target_label: service
       - target_label: __address__
         replacement: blackbox:9115
+
+  # The Mac itself: disk, memory, load. Runs on the host because a container cannot see macOS.
+  - job_name: host
+    static_configs: [{ targets: ["host.docker.internal:9419"] }]
+
   # Tunnel health: the same services as seen from the internet. Targets live in public-targets.json,
   # which is gitignored so hostnames stay out of the repo; copy public-targets.example.json to start.
   - job_name: public
