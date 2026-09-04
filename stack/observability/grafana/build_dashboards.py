@@ -50,7 +50,8 @@ def stat(title, expr, pos, unit=None, ds=PROM, mappings=None, thresholds=None, l
                                       "thresholds": thresholds or {"mode": "absolute", "steps": [{"color": "green", "value": None}]}}, "overrides": []},
          "options": {"reduceOptions": {"calcs": [reduce], "fields": "", "values": False}, "colorMode": "background", "graphMode": "none",
                      "textMode": "value_and_name" if legend else "value", "justifyMode": "center"},
-         "targets": [{"refId": "A", "datasource": ds, "rawSql" if sql else "expr": expr, "format": "table" if sql else "time_series"} | ({"legendFormat": legend} if legend else {})]}
+         "targets": [{"refId": "A", "datasource": ds, "rawSql" if sql else "expr": expr, "format": "table" if sql else "time_series"}
+                     | ({} if sql else {"instant": True}) | ({"legendFormat": legend} if legend else {})]}
     if desc:
         p["description"] = desc
     if decimals is not None:
@@ -88,7 +89,7 @@ P = []
 P.append(row("Is it up", 0))
 for i, (svc, label) in enumerate([("litellm", "LiteLLM (router)"), ("open-webui", "Open WebUI (chat)"), ("rag-ingest", "rag-ingest (documents)"), ("host.docker.internal", "oMLX (models, on the host)")]):
     P.append(stat(label, f'min(probe_success{{service="{svc}"}})', (i * 5, 1, 5, 3), mappings=UPDOWN, thresholds=RED_GREEN))
-P.append(stat("Restarts (24h)", "sum(delta(container_restarts_total[24h])) or vector(0)", (20, 1, 4, 3),
+P.append(stat("Restarts (24h)", "clamp_min(sum(increase(container_restarts_total[24h])), 0) or vector(0)", (20, 1, 4, 3),
               thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}, decimals=0))
 
 P.append(row("Model traffic (LiteLLM /metrics)", 4))

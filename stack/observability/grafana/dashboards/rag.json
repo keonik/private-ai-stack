@@ -80,7 +80,8 @@
       "uid": "prom"
      },
      "expr": "rag_chunks",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -136,7 +137,8 @@
       "uid": "prom"
      },
      "expr": "rag_documents",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -192,7 +194,8 @@
       "uid": "prom"
      },
      "expr": "rag_documents_with_fields",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -252,7 +255,8 @@
       "uid": "prom"
      },
      "expr": "sum(increase(rag_ingested_files_total{result=\"error\"}[24h])) or vector(0)",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -308,7 +312,8 @@
       "uid": "prom"
      },
      "expr": "histogram_quantile(0.95, sum by (le) (rate(rag_request_seconds_bucket{endpoint=\"/search\"}[1h])))",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -364,7 +369,8 @@
       "uid": "prom"
      },
      "expr": "histogram_quantile(0.95, sum by (le) (rate(rag_request_seconds_bucket{endpoint=\"/query\"}[1h])))",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ],
    "description": "/query includes the answer generation by the chat model."

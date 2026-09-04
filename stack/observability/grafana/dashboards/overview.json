@@ -97,7 +97,8 @@
       "uid": "prom"
      },
      "expr": "min(probe_success{service=\"litellm\"})",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -170,7 +171,8 @@
       "uid": "prom"
      },
      "expr": "min(probe_success{service=\"open-webui\"})",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -243,7 +245,8 @@
       "uid": "prom"
      },
      "expr": "min(probe_success{service=\"rag-ingest\"})",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -316,7 +319,8 @@
       "uid": "prom"
      },
      "expr": "min(probe_success{service=\"host.docker.internal\"})",
-     "format": "time_series"
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -379,8 +383,9 @@
       "type": "prometheus",
       "uid": "prom"
      },
-     "expr": "sum(delta(container_restarts_total[24h])) or vector(0)",
-     "format": "time_series"
+     "expr": "clamp_min(sum(increase(container_restarts_total[24h])), 0) or vector(0)",
+     "format": "time_series",
+     "instant": true
     }
    ]
   },
@@ -467,6 +472,7 @@
      },
      "expr": "min by (service) (probe_success{job=\"public\"})",
      "format": "time_series",
+     "instant": true,
      "legendFormat": "{{service}}"
     }
    ],
