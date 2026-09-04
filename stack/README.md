@@ -248,15 +248,21 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
 
 ## Keeping it up
 
-`./scripts/install-launchd.sh` installs two user agents (templates in `launchd/`):
+`./scripts/install-launchd.sh` installs three user agents (templates in `launchd/`):
 
 - `dev.private-ai-stack.backup` — `backup.sh` at 03:15, keeps 7 tarballs (`KEEP`). One run of the
   current data set is ~500 MB. Log: `~/Library/Logs/private-ai-stack.backup.log`.
 - `dev.private-ai-stack.keepalive` — every 5 min, `docker compose up -d` if any service is not
   running. It does nothing when Docker itself is down (stopping Docker is a person's decision, not
   a script's). Verified by stopping a service by hand: back within one tick.
+- `dev.private-ai-stack.docker-boot` — once at login: if the Docker engine is unreachable it runs
+  `colima start` (Homebrew's colima is not a login service by default, so nothing came back after a
+  reboot), waits for the engine, then brings the stack up. It only ever starts the engine when it is
+  already down, so a deliberate `colima stop` during the day stays stopped. On a Docker Desktop machine
+  it says so and exits rather than guessing.
 
-`./scripts/install-launchd.sh remove` uninstalls both.
+Note that the engine is shared with anything else on the machine that uses Docker, so this agent starts
+that too. `./scripts/install-launchd.sh remove` uninstalls all three.
 
 ## Retrieval evaluation
 
@@ -289,9 +295,12 @@ misses are the same handful of generic questions in every mode.
 
 ## Observability
 
-`docker compose --profile obs up -d` adds six small containers and two provisioned dashboards. Nothing
+`docker compose --profile obs up -d` adds seven small containers and two provisioned dashboards. Nothing
 in the main stack changes except one line in `litellm/config.yaml` (`callbacks: ["prometheus"]`) and a
 `/metrics` endpoint on rag-ingest. Grafana is at `:3001` (`GRAFANA_USER` / `GRAFANA_PASSWORD`).
+
+Setting `COMPOSE_PROFILES=obs` in `.env` makes it permanent: plain `docker compose up -d` and the
+keepalive agent then include these services, so they come back with everything else after a reboot.
 
 | piece | what it gives you | where it comes from |
 |---|---|---|
@@ -299,7 +308,8 @@ in the main stack changes except one line in `litellm/config.yaml` (`callbacks: 
 | blackbox | **is it up** — one probe per service every 15 s, including oMLX on the host | `/health`-style URLs; a 401 from oMLX still counts as up |
 | docker-stats | CPU %, memory, network, restarts per container | 120 lines of stdlib Python over the Docker socket (`observability/docker-stats/exporter.py`) |
 | Loki + Alloy | every container's stdout/stderr, 14 days, searchable by service | Alloy discovers compose containers over the socket |
-| Grafana | the dashboards and alerts below; also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
+| Grafana | the dashboards and alerts below (port 3001 is open on the LAN like the chat UI, so give `GRAFANA_PASSWORD` a real value); also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
+| alert-relay | turns Grafana's alert JSON into a notification a person can read on a phone | 90 lines of stdlib Python (`observability/alert-relay/relay.py`) |
 
 **Dashboards** (`observability/grafana/build_dashboards.py` generates the JSON; edit the Python, not the JSON):
 
@@ -322,15 +332,28 @@ in the main stack changes except one line in `litellm/config.yaml` (`callbacks: 
 | Container restarting | more than 2 restarts in an hour |
 | Container memory above 85 % of the Docker VM | for 5 min (that is the colima / Docker Desktop VM, not the Mac) |
 
-They all go to one webhook contact point, `ALERT_WEBHOOK_URL`. The simplest thing that reaches a phone is
-an [ntfy](https://ntfy.sh) topic: set `ALERT_WEBHOOK_URL=https://ntfy.sh/<a long random topic name>` and
-install the app. Slack and Discord webhooks work the same way. Unset, alerts still show in Grafana and
-the notifications go to a dead address.
+All six go to one contact point, which posts to **alert-relay**. Grafana's own webhook payload is a JSON
+envelope that a phone would display verbatim, so the relay unwraps it and sends one short notification per
+alert: title `Service down - rag-ingest`, the summary as the body, `critical` mapped to a high priority and
+a tap-through link to the alert in Grafana. Resolutions arrive as `Resolved: ...` at a lower priority.
 
-Verified end to end on the reference Mac: contact-point test delivered; then `docker compose stop
-rag-ingest` → the "Service down" alert for `rag-ingest` arrived at a local webhook receiver 3 min 46 s later
-(2 min `for` + evaluation and grouping intervals). Every dashboard query and
-alert expression was run against the live datasources before being committed (30 PromQL, 4 SQL, 6 rules).
+Point it somewhere by setting one variable in `.env`:
+
+```
+NTFY_URL=https://ntfy.sh/<a long random topic name>     # then subscribe to that topic in the ntfy app
+```
+
+The topic name is the only secret, so make it long and random; ntfy is free and needs no account. A Slack
+or Discord webhook URL works in the same variable — the relay picks the payload shape from the host name.
+Unset, alerts still appear in Grafana and the relay just logs them. To bypass the relay entirely and send
+Grafana's raw JSON somewhere, set `ALERT_WEBHOOK_URL` instead.
+
+Verified end to end on the reference Mac: `docker compose stop rag-ingest` → `Service down - rag-ingest`
+at priority 5 on an ntfy topic, with the summary as the body; `docker compose start` → `Resolved: Service
+down - rag-ingest` at priority 2. Failure to phone takes the rule's 2-minute `for` plus up to a minute of
+evaluation and 30 s of grouping, so 2-4 minutes depending on where the failure falls in that cycle. Every
+dashboard query and alert expression was also run against the live datasources before being committed
+(30 PromQL, 4 SQL, 6 rules).
 
 Why not cAdvisor: Docker 29 with the containerd image store (`docker info` → `overlayfs [driver-type
 io.containerd.snapshotter.v1]`, the colima default) leaves cAdvisor unable to identify containers
