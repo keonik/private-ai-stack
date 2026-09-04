@@ -25,3 +25,6 @@ finetune/Modelfile
 finetune/oh1/raw/
 finetune/oh1/eval/
 stack/observability/prometheus/public-targets.json
+*.swp
+*.swo
+*~
