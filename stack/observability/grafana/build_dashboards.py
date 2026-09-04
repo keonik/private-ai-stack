@@ -116,6 +116,17 @@ P.append(ts("Network in / out", [{"expr": "sum by (service) (rate(container_netw
 
 P.append(row("Logs (Loki)", 44))
 P.append(logs("Errors and warnings across the stack", '{service=~"litellm|open-webui|rag-ingest|postgres"} |~ "(?i)(error|warn|traceback|exception)" != "GET /metrics"', (0, 45, 24, 10)))
+# Public endpoints (the tunnel, probed from outside) go directly under the up/down tiles.
+for _p in P:
+    if _p["gridPos"]["y"] >= 4:
+        _p["gridPos"]["y"] += 4
+P.append(row("Reachable from the internet", 4))
+P.append(stat("Public endpoints", 'min by (service) (probe_success{job="public"})', (0, 5, 24, 3), mappings=UPDOWN,
+              thresholds=RED_GREEN, legend="{{service}}",
+              desc="Each hostname in observability/prometheus/public-targets.json, fetched over the internet every 15 s. "
+                   "DOWN here with the service UP above means the tunnel is broken, not the app. A Cloudflare Access "
+                   "login page still counts as UP."))
+P.sort(key=lambda d: (d["gridPos"]["y"], d["gridPos"]["x"]))
 (OUT / "overview.json").write_text(json.dumps(dashboard("pas-overview", "Private AI stack — overview", P, ["private-ai-stack"]), indent=1))
 
 # ------------------------------------------------------------------ rag

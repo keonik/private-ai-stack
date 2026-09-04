@@ -264,6 +264,39 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
 Note that the engine is shared with anything else on the machine that uses Docker, so this agent starts
 that too. `./scripts/install-launchd.sh remove` uninstalls all three.
 
+## Grafana through a tunnel
+
+Grafana behaves like the chat UI: point a Cloudflare tunnel (or any reverse proxy) at `localhost:3001`
+and set two things in `.env`:
+
+```
+GRAFANA_ROOT_URL=https://observe.example.com   # absolute links, including the one in phone alerts
+GRAFANA_COOKIE_SECURE=true                     # only once you always reach it over https
+```
+
+`GRAFANA_ROOT_URL` matters more than it looks: the tap-through link in an alert notification is built
+from it, so with the default `localhost` value an alert on your phone links nowhere. `COOKIE_SECURE=true`
+makes Grafana refuse to set a session cookie over plain http, which locks out `http://<lan-ip>:3001` —
+turn it on only when the tunnel is the way in, and keep the port closed at the firewall if it is.
+
+A password is not an authentication layer for a public hostname. Put Cloudflare Access (or equivalent)
+in front of this and the chat UI both; the metrics are less sensitive than the documents, but the log
+panel quotes application logs and the spend table names your keys.
+
+**Tunnel health.** The `public` scrape job probes each hostname from the internet every 15 s and the
+overview dashboard shows one tile per hostname under "Reachable from the internet". A hostname DOWN
+there while the service is UP above means the tunnel or DNS is broken rather than the app — the failure
+mode you would otherwise hear about from a user. Targets live in
+`observability/prometheus/public-targets.json`, which is gitignored so hostnames stay out of the repo:
+
+```bash
+cp observability/prometheus/public-targets.example.json observability/prometheus/public-targets.json
+# edit, then: docker compose up -d --force-recreate prometheus
+```
+
+A Cloudflare Access login page answers 403 or 302 rather than 200, and the probe counts both as up, so
+turning Access on does not turn the tile red.
+
 ## Retrieval evaluation
 
 `scripts/rag_eval.py` builds a golden set from the sidecars — one question per sampled document,

@@ -6,3 +6,11 @@ modules:
       valid_status_codes: [200, 401]
       follow_redirects: true
       preferred_ip_protocol: ip4
+  # Public endpoints through the tunnel. 403 is a pass: it means Cloudflare Access is doing its job.
+  public_up:
+    prober: http
+    timeout: 10s
+    http:
+      valid_status_codes: [200, 302, 401, 403]
+      follow_redirects: true
+      preferred_ip_protocol: ip4

@@ -38,3 +38,21 @@ scrape_configs:
         target_label: service
       - target_label: __address__
         replacement: blackbox:9115
+  # Tunnel health: the same services as seen from the internet. Targets live in public-targets.json,
+  # which is gitignored so hostnames stay out of the repo; copy public-targets.example.json to start.
+  - job_name: public
+    metrics_path: /probe
+    params: { module: [public_up] }
+    file_sd_configs:
+      - files: ["/etc/prometheus/public-targets.json"]
+        refresh_interval: 1m
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - source_labels: [__param_target]
+        regex: "https?://([^:/]+).*"
+        target_label: service
+      - target_label: __address__
+        replacement: blackbox:9115
