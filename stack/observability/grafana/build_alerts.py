@@ -127,7 +127,16 @@ GAMEPLAN_RULES = [
          "exactly like a quiet healthy system, which is why it alerts."),
 ]
 
-OUT.write_text(json.dumps({"apiVersion": 1, "groups": [
+# Rules that once existed and must now be removed. Grafana's file provisioning
+# adds and updates rules but does NOT reap ones that simply vanish from the file
+# — a retired rule keeps evaluating and keeps paging until it is named here.
+RETIRED = [
+    "gp-run-unfinished",   # replaced by gp-run-incomplete, which reads the summary's mtime
+]
+
+OUT.write_text(json.dumps({"apiVersion": 1,
+                           "deleteRules": [{"orgId": 1, "uid": uid} for uid in RETIRED],
+                           "groups": [
     {"orgId": 1, "name": "private-ai-stack", "folder": "Private AI stack", "interval": "1m", "rules": RULES},
     {"orgId": 1, "name": "gameplan", "folder": "Gameplan", "interval": "1m", "rules": GAMEPLAN_RULES}]}, indent=1))
-print(f"wrote {OUT.name}: {len(RULES)} stack rules, {len(GAMEPLAN_RULES)} gameplan rules")
+print(f"wrote {OUT.name}: {len(RULES)} stack rules, {len(GAMEPLAN_RULES)} gameplan rules, {len(RETIRED)} retired")
