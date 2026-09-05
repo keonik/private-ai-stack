@@ -71,6 +71,11 @@ GAMEPLAN_RULES = [
          "No crash-report download run has finished in {{ $values.A.Value | humanizeDuration }}",
          "The hourly pipeline runs 04:00-23:00, so a healthy overnight gap already reaches five hours - hence the "
          "six-hour threshold rather than something tighter. Check automation/daily.log on glazed and whether cron ran."),
+    rule("gp-run-failed", "A download run reported failure",
+         "min(gameplan_pipeline_last_run_ok)", "lt", 1, "0s", "warning",
+         "The last download run finished {{ if eq $values.A.Value 0.0 }}failed{{ else }}partial{{ end }}",
+         "Recomputed from the run's own county counts: 0.5 means some counties failed but others worked, 0 means "
+         "none succeeded. Check which counties on the dashboard before assuming the portal is the cause."),
     rule("gp-download-failures", "Crash-report fetches are failing",
          'gameplan_pipeline_last_run_reports{outcome="failed"} / clamp_min(gameplan_pipeline_last_run_reports{outcome="found"}, 1)',
          "gt", 0.5, "0s", "critical",
@@ -105,12 +110,12 @@ GAMEPLAN_RULES = [
          "Worst field agreement is {{ $values.A.Value | humanizePercentage }}",
          "The shadow compares the production parser against the geometry parser on real PDFs. One field dropping is "
          "the signal an aggregate parity number would hide. See automation/shadow-out."),
-    rule("gp-run-unfinished", "A pipeline run never reported back",
-         'max by (job) (gameplan_cron_unfinished_run)', "gt", 0, "90m", "warning",
-         "The {{ $labels.job }} pipeline started a run that never recorded an outcome",
-         "The finalize line is written only once the server accepts the outcome, so a run killed by the 3h watchdog "
-         "or unable to reach the server leaves the previous run's success standing. This is what catches that. "
-         "90m because the hourly pipeline's own runs are far shorter."),
+    rule("gp-run-incomplete", "A pipeline run never completed",
+         "time() - gameplan_pipeline_last_run_summary_written_timestamp_seconds", "gt", 5400, "10m", "warning",
+         "No download run has written a summary in {{ $values.A.Value | humanizeDuration }}",
+         "A run killed by the 3h watchdog, or one that died mid-flight, writes no summary at all — so this climbing "
+         "past an hourly cadence is how a dead run shows up. Fires well before gp-pipeline-stale, which is set wide "
+         "enough to sit through the 23:00-04:00 overnight gap."),
     rule("gp-reconcile-silent", "The nightly reconcile has not run",
          'time() - gameplan_cron_log_updated_timestamp_seconds{job="reconcile"}', "gt", 26 * 3600, "10m", "warning",
          "Nothing has been written to reconcile.log in {{ $values.A.Value | humanizeDuration }}",

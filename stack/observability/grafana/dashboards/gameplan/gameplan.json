@@ -339,7 +339,7 @@
   {
    "id": 307,
    "type": "stat",
-   "title": "Outreach pipeline",
+   "title": "Run outcome",
    "datasource": {
     "type": "prometheus",
     "uid": "prom"
@@ -357,13 +357,13 @@
       {
        "type": "value",
        "options": {
-        "-1": {
-         "text": "n/a",
-         "color": "text"
-        },
         "0": {
          "text": "FAILED",
          "color": "red"
+        },
+        "0.5": {
+         "text": "PARTIAL",
+         "color": "orange"
         },
         "1": {
          "text": "OK",
@@ -378,6 +378,10 @@
        {
         "color": "red",
         "value": null
+       },
+       {
+        "color": "orange",
+        "value": 0.5
        },
        {
         "color": "green",
@@ -398,7 +402,7 @@
     },
     "colorMode": "background",
     "graphMode": "none",
-    "textMode": "value",
+    "textMode": "value_and_name",
     "justifyMode": "center"
    },
    "targets": [
@@ -408,12 +412,13 @@
       "type": "prometheus",
       "uid": "prom"
      },
-     "expr": "gameplan_cron_last_run_ok{job=\"daily\"}",
+     "expr": "gameplan_pipeline_last_run_ok",
      "format": "time_series",
-     "instant": true
+     "instant": true,
+     "legendFormat": "{{job}}"
     }
    ],
-   "description": "Status of the last run RECORDED in automation/daily.log. The finalize line is only written once the server accepts the outcome, so a run killed by the watchdog leaves the previous run's success standing \u2014 read it next to 'Run never reported back' below."
+   "description": "Recomputed from the run's own county counts, the same way the pipeline derives what it reports to the server \u2014 not read back out of a log line. The label says which entrypoint wrote it: the hourly pipeline and the nightly reconcile both produce these."
   },
   {
    "id": 308,
@@ -2309,7 +2314,7 @@
   {
    "id": 343,
    "type": "stat",
-   "title": "Run never reported back",
+   "title": "Since a run last completed",
    "datasource": {
     "type": "prometheus",
     "uid": "prom"
@@ -2322,22 +2327,8 @@
    },
    "fieldConfig": {
     "defaults": {
-     "unit": "short",
-     "mappings": [
-      {
-       "type": "value",
-       "options": {
-        "0": {
-         "text": "\u2014",
-         "color": "green"
-        },
-        "1": {
-         "text": "UNFINISHED",
-         "color": "red"
-        }
-       }
-      }
-     ],
+     "unit": "s",
+     "mappings": [],
      "thresholds": {
       "mode": "absolute",
       "steps": [
@@ -2346,11 +2337,16 @@
         "value": null
        },
        {
+        "color": "orange",
+        "value": 5400
+       },
+       {
         "color": "red",
-        "value": 1
+        "value": 21600
        }
       ]
-     }
+     },
+     "decimals": 0
     },
     "overrides": []
    },
@@ -2364,7 +2360,7 @@
     },
     "colorMode": "background",
     "graphMode": "none",
-    "textMode": "value_and_name",
+    "textMode": "value",
     "justifyMode": "center"
    },
    "targets": [
@@ -2374,13 +2370,12 @@
       "type": "prometheus",
       "uid": "prom"
      },
-     "expr": "gameplan_cron_unfinished_run",
+     "expr": "time() - gameplan_pipeline_last_run_summary_written_timestamp_seconds",
      "format": "time_series",
-     "instant": true,
-     "legendFormat": "{{job}}"
+     "instant": true
     }
    ],
-   "description": "A run started after the last recorded outcome. Briefly normal while one is running; if it stays, that run died without reporting back \u2014 the case 'Outreach pipeline' cannot see."
+   "description": "A run that is killed mid-flight writes no summary, so this keeps climbing \u2014 which is how a dead run shows up. Orange past 90 min; the hourly pipeline\u2019s own runs are far shorter than that."
   },
   {
    "id": 344,

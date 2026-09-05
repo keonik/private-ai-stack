@@ -720,6 +720,70 @@
      "isPaused": false
     },
     {
+     "uid": "gp-run-failed",
+     "title": "A download run reported failure",
+     "condition": "C",
+     "for": "0s",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "The last download run finished {{ if eq $values.A.Value 0.0 }}failed{{ else }}partial{{ end }}",
+      "description": "Recomputed from the run's own county counts: 0.5 means some counties failed but others worked, 0 means none succeeded. Check which counties on the dashboard before assuming the portal is the cause."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "min(gameplan_pipeline_last_run_ok)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "lt",
+           "params": [
+            1
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
      "uid": "gp-download-failures",
      "title": "Crash-report fetches are failing",
      "condition": "C",
@@ -1168,16 +1232,16 @@
      "isPaused": false
     },
     {
-     "uid": "gp-run-unfinished",
-     "title": "A pipeline run never reported back",
+     "uid": "gp-run-incomplete",
+     "title": "A pipeline run never completed",
      "condition": "C",
-     "for": "90m",
+     "for": "10m",
      "labels": {
       "severity": "warning"
      },
      "annotations": {
-      "summary": "The {{ $labels.job }} pipeline started a run that never recorded an outcome",
-      "description": "The finalize line is written only once the server accepts the outcome, so a run killed by the 3h watchdog or unable to reach the server leaves the previous run's success standing. This is what catches that. 90m because the hourly pipeline's own runs are far shorter."
+      "summary": "No download run has written a summary in {{ $values.A.Value | humanizeDuration }}",
+      "description": "A run killed by the 3h watchdog, or one that died mid-flight, writes no summary at all \u2014 so this climbing past an hourly cadence is how a dead run shows up. Fires well before gp-pipeline-stale, which is set wide enough to sit through the 23:00-04:00 overnight gap."
      },
      "data": [
       {
@@ -1189,7 +1253,7 @@
        "datasourceUid": "prom",
        "model": {
         "refId": "A",
-        "expr": "max by (job) (gameplan_cron_unfinished_run)",
+        "expr": "time() - gameplan_pipeline_last_run_summary_written_timestamp_seconds",
         "instant": true,
         "intervalMs": 15000,
         "maxDataPoints": 100
@@ -1207,7 +1271,7 @@
           "evaluator": {
            "type": "gt",
            "params": [
-            0
+            5400
            ]
           },
           "operator": {
