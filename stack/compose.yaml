@@ -187,12 +187,9 @@ services:
       - ./observability/alloy:/etc/alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Gameplan's cron pipelines are not containers, so their logs only reach Loki by being read
-      # off the host filesystem. Directories only: single-file bind mounts wedged the colima daemon
-      # outright, and the two files worth having (~/Desktop/integration.log, ~/Library/Logs) sit
-      # under macOS-privacy-protected paths the VM cannot read anyway. The worker's own structured
-      # logs live inside the repo, so they come in with the second mount.
+      # off the host filesystem. A directory, never a single file: a one-file bind mount wedged the
+      # colima VM's host-bind layer outright (see the Gameplan section of the README).
       - ${GAMEPLAN_DIR:-/Users/glazed/Development/gameplan}/automation:/gameplan/automation:ro
-      - ${GAMEPLAN_DIR:-/Users/glazed/Development/gameplan}/worker/logs:/gameplan/worker-logs:ro
     depends_on: [loki]
 
   alert-relay:
