@@ -25,10 +25,10 @@ def text_of(path: Path, pages: int | None) -> str:
     return "\n".join((p.extract_text() or "") for p in ps)
 
 
-def one(path: Path, kind: str, pages: int | None) -> tuple[Path, float, list[str]]:
+def one(path: Path, kind: str, pages: int | None, no_prep: bool = False) -> tuple[Path, float, list[str]]:
     t0 = time.time()
     raw = text_of(path, pages)
-    text = PREP.get(kind, lambda x: x)(raw)
+    text = raw if no_prep else PREP.get(kind, lambda x: x)(raw)
     obj = extract(text, kind)
     issues = validate(obj)
     flags = needs_review(obj, issues)
@@ -45,6 +45,7 @@ def one(path: Path, kind: str, pages: int | None) -> tuple[Path, float, list[str
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("dir"); ap.add_argument("--kind", required=True); ap.add_argument("--pages", type=int)
+    ap.add_argument("--no-prep", action="store_true", help="skip caption-anchored preprocessing (for measuring what it is worth)")
     ap.add_argument("--workers", type=int, default=2); ap.add_argument("--limit", type=int); ap.add_argument("--glob", default="*.pdf")
     ap.add_argument("--only-flagged", action="store_true", help="re-extract files whose sidecar has review flags (escalation pass with a bigger model)")
     ap.add_argument("--where", help='JSON: re-extract files whose sidecar fields match ANY key, e.g. \'{"alcohol_or_drugs_suspected": true}\'. Use to verify rare positives with a bigger model.')
@@ -73,7 +74,7 @@ def main() -> None:
     print(f"{len(files)} files to extract ({a.kind}, pages={a.pages}, workers={a.workers})", flush=True)
     t0, done, flagged, errors = time.time(), 0, 0, 0
     with ThreadPoolExecutor(a.workers) as ex:
-        futs = {ex.submit(one, p, a.kind, a.pages): p for p in files}
+        futs = {ex.submit(one, p, a.kind, a.pages, a.no_prep): p for p in files}
         for f in as_completed(futs):
             try:
                 p, secs, flags = f.result(); done += 1; flagged += bool(flags)

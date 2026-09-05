@@ -107,6 +107,49 @@ Field names in the schema description matter: adding "ACDA, speed, licence and i
 alcohol" is what let the 27B explain the distinction in its evidence on all 13.
 
 
+## Synthetic corpus: the same measurement, publishable
+
+The 501 reports below are public records containing names, addresses and phone numbers, so no output
+from them can be shown to anyone. `scripts/gen_synthetic_oh1.py` produces a stand-in with the same
+caption structure and the same flattened code legends (`1 - FATAL`, `98 - ANIMAL`,
+`1 - PEDESTRIAN  2 - BICYCLIST`), and writes a ground-truth label per document, so accuracy can be
+scored exactly rather than sampled.
+
+```bash
+python scripts/gen_synthetic_oh1.py 64 out/synthetic-oh1        # deterministic, SEED=0
+python scripts/batch.py --kind crash_oh1 --pages 1 --workers 4 out/synthetic-oh1
+python scripts/batch.py --kind crash_oh1 --pages 1 --workers 4 --no-prep out/synthetic-oh1-naive
+python scripts/score_synthetic.py out/synthetic-oh1/labels.json out/synthetic-oh1-naive out/synthetic-oh1
+```
+
+Both passes use the same 4B model (`local/chat-small`) at ~20 documents/minute. The only difference is
+`--no-prep`, which feeds the model the raw flattened form instead of the caption-anchored extract.
+
+| field | raw form text | with preprocessing |
+|---|---|---|
+| report_number, crash_datetime, county_code, locality, officer_name | 64/64 each | 64/64 each |
+| reporting_agency | 64/64 (49 exact) | 64/64 (49 exact) |
+| animal_involved | 64/64 | 64/64 |
+| alcohol_or_drugs_suspected | 64/64 | 64/64 |
+| pedestrian_or_cyclist_involved | **53/64** — 11 false positives | 64/64 |
+| injury_mentioned | **53/64** — 11 false positives | 64/64 |
+| **all field values** | 618/640 (0.966) | **640/640 (1.000)** |
+
+Every remaining disagreement on `reporting_agency` is the model writing `Licking County Sheriff's
+Office` where the form prints `LICKING COUNTY SHERIFFS OFFICE`. That is formatting, not extraction, so
+the table scores it correct and reports the exact-match count alongside.
+
+**The 22 false positives are the whole argument for preprocessing.** They are not hallucinations: the
+model is reading `PEDESTRIAN  1 - PEDESTRIAN  2 - BICYCLIST` and `INJURIES  1 - FATAL` off the form and
+concluding a pedestrian was involved and someone was hurt. Every form of this kind carries those
+legends on every page, so the failure appears on documents that mention neither. This reproduces the
+same failure measured on the real corpus, on data that can be published.
+
+Read the perfect score with care. Synthetic narratives are regular, and the real 501 were not: officer
+names came back 500/501 against a rule-based parser, and before the schema wording was fixed the same
+4B model called 12 of 13 ACDA citations "alcohol suspected" at confidence 1.0. Use this set to show the
+method and to regression-test changes, not as a claim about scanned paper.
+
 ## Cross-check against a rule-based parser (free ground truth)
 
 The same 501 PDFs are processed by a separate, hand-written OH-1 parser (regexes over pdf.js text,

@@ -29,3 +29,4 @@ stack/observability/prometheus/public-targets.json
 *.swo
 *~
 stack/observability/prometheus/internal-targets.json
+extract/out/

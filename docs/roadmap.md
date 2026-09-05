@@ -31,6 +31,7 @@ Ordered by what buyers ask for most, weighted by distance from what exists.
 - [x] Recto OCR hook (`RECTO_URL`) for scanned PDFs; text PDFs read directly
 - [x] Review queue UI + approve endpoint; live-tested on a synthetic invoice (all fields conf 1.0, rules clean)
 - [x] Two-tier extraction measured on 501 real forms: 4B everything (37 min), 27B verifies positives; alcohol false positives 12/13 → 0
+- [x] Publishable synthetic OH-1 corpus with ground-truth labels (`gen_synthetic_oh1.py`, `score_synthetic.py`): preprocessing 0.966 → 1.000, 22 legend-leakage false positives removed; the real-data findings reproduced on data that can be shown
 - [x] Cross-checked against a rule-based OH-1 parser on all 501: report number/date/time/county 501/501, officer 500/501; narrative-vs-coded-box gap measured (103 coded injuries the narrative never mentions)
 - [x] Batch mode → metadata sidecars; OH-1 schema + caption-anchored preprocessor; coded-box limitation measured and documented
 - [x] xlsx export verified · [x] model tiering measured (small model 13 s/doc, escalate flagged docs to 27B) · [ ] per-document pricing page
