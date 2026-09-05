@@ -413,7 +413,7 @@
      "instant": true
     }
    ],
-   "description": "Status of the last run recorded in automation/daily.log."
+   "description": "Status of the last run RECORDED in automation/daily.log. The finalize line is only written once the server accepts the outcome, so a run killed by the watchdog leaves the previous run's success standing \u2014 read it next to 'Run never reported back' below."
   },
   {
    "id": 308,
@@ -2309,7 +2309,7 @@
   {
    "id": 343,
    "type": "stat",
-   "title": "Exporter sources readable",
+   "title": "Run never reported back",
    "datasource": {
     "type": "prometheus",
     "uid": "prom"
@@ -2317,7 +2317,83 @@
    "gridPos": {
     "x": 12,
     "y": 56,
-    "w": 12,
+    "w": 6,
+    "h": 4
+   },
+   "fieldConfig": {
+    "defaults": {
+     "unit": "short",
+     "mappings": [
+      {
+       "type": "value",
+       "options": {
+        "0": {
+         "text": "\u2014",
+         "color": "green"
+        },
+        "1": {
+         "text": "UNFINISHED",
+         "color": "red"
+        }
+       }
+      }
+     ],
+     "thresholds": {
+      "mode": "absolute",
+      "steps": [
+       {
+        "color": "green",
+        "value": null
+       },
+       {
+        "color": "red",
+        "value": 1
+       }
+      ]
+     }
+    },
+    "overrides": []
+   },
+   "options": {
+    "reduceOptions": {
+     "calcs": [
+      "lastNotNull"
+     ],
+     "fields": "",
+     "values": false
+    },
+    "colorMode": "background",
+    "graphMode": "none",
+    "textMode": "value_and_name",
+    "justifyMode": "center"
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "prometheus",
+      "uid": "prom"
+     },
+     "expr": "gameplan_cron_unfinished_run",
+     "format": "time_series",
+     "instant": true,
+     "legendFormat": "{{job}}"
+    }
+   ],
+   "description": "A run started after the last recorded outcome. Briefly normal while one is running; if it stays, that run died without reporting back \u2014 the case 'Outreach pipeline' cannot see."
+  },
+  {
+   "id": 344,
+   "type": "stat",
+   "title": "Exporter sources readable",
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   },
+   "gridPos": {
+    "x": 18,
+    "y": 56,
+    "w": 6,
     "h": 4
    },
    "fieldConfig": {
@@ -2383,7 +2459,7 @@
    "description": "A source the exporter cannot read reports DOWN here rather than silently exporting nothing, which would look like a healthy quiet system."
   },
   {
-   "id": 344,
+   "id": 345,
    "type": "logs",
    "title": "Pipeline errors and warnings",
    "datasource": {
@@ -2415,7 +2491,7 @@
    ]
   },
   {
-   "id": 345,
+   "id": 346,
    "type": "logs",
    "title": "Hourly download pipeline",
    "datasource": {

@@ -105,6 +105,12 @@ GAMEPLAN_RULES = [
          "Worst field agreement is {{ $values.A.Value | humanizePercentage }}",
          "The shadow compares the production parser against the geometry parser on real PDFs. One field dropping is "
          "the signal an aggregate parity number would hide. See automation/shadow-out."),
+    rule("gp-run-unfinished", "A pipeline run never reported back",
+         'max by (job) (gameplan_cron_unfinished_run)', "gt", 0, "90m", "warning",
+         "The {{ $labels.job }} pipeline started a run that never recorded an outcome",
+         "The finalize line is written only once the server accepts the outcome, so a run killed by the 3h watchdog "
+         "or unable to reach the server leaves the previous run's success standing. This is what catches that. "
+         "90m because the hourly pipeline's own runs are far shorter."),
     rule("gp-reconcile-silent", "The nightly reconcile has not run",
          'time() - gameplan_cron_log_updated_timestamp_seconds{job="reconcile"}', "gt", 26 * 3600, "10m", "warning",
          "Nothing has been written to reconcile.log in {{ $values.A.Value | humanizeDuration }}",

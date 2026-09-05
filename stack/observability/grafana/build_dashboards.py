@@ -223,7 +223,9 @@ G.append(stat("Counties failed", 'gameplan_pipeline_last_run_counties{outcome="f
 G.append(stat("Run duration", "gameplan_pipeline_last_run_duration_seconds", at(4, 4, 16), "s", decimals=0))
 G.append(stat("Outreach pipeline", 'gameplan_cron_last_run_ok{job="daily"}', at(4, 4, 20), mappings=OK_FAIL,
               thresholds={"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "green", "value": 1}]},
-              desc="Status of the last run recorded in automation/daily.log.")); down(4)
+              desc="Status of the last run RECORDED in automation/daily.log. The finalize line is only written once "
+                   "the server accepts the outcome, so a run killed by the watchdog leaves the previous run's "
+                   "success standing — read it next to 'Run never reported back' below.")); down(4)
 
 G.append(ts("Reports per run, by outcome", ["gameplan_pipeline_last_run_reports"], at(12, 7, 0), "short", legend="{{outcome}}",
             desc="Stepped, not rated: each point is the last completed run, so the line is flat between runs."))
@@ -291,7 +293,12 @@ G.append(stat("Since each cron last wrote", "time() - gameplan_cron_log_updated_
               legend="{{job}}", thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 26 * 3600}, {"color": "red", "value": 48 * 3600}]},
               decimals=0, desc="daily runs hourly 04:00–23:00, shadow at :20 past those hours, reconcile at 00:10, "
                                "integrations at :30. Reconcile and integrations are expected to look a day old."))
-G.append(stat("Exporter sources readable", "gameplan_pipeline_source_up", at(12, 4, 12), mappings=UPDOWN, thresholds=RED_GREEN,
+G.append(stat("Run never reported back", "gameplan_cron_unfinished_run", at(6, 4, 12), legend="{{job}}",
+              mappings=[{"type": "value", "options": {"0": {"text": "\u2014", "color": "green"}, "1": {"text": "UNFINISHED", "color": "red"}}}],
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]},
+              desc="A run started after the last recorded outcome. Briefly normal while one is running; if it stays, "
+                   "that run died without reporting back \u2014 the case 'Outreach pipeline' cannot see."))
+G.append(stat("Exporter sources readable", "gameplan_pipeline_source_up", at(6, 4, 18), mappings=UPDOWN, thresholds=RED_GREEN,
               legend="{{source}}", desc="A source the exporter cannot read reports DOWN here rather than silently "
                                         "exporting nothing, which would look like a healthy quiet system.")); down(4)
 G.append(logs("Pipeline errors and warnings", '{job="gameplan"} |~ "(?i)(error|warn|fail|not a valid pdf)"', at(24, 10))); down(10)
