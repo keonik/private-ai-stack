@@ -1,6 +1,13 @@
 apiVersion: 1
+# One provider per Grafana folder; each points at its own subdirectory of
+# observability/grafana/dashboards. Dashboards are generated — edit
+# build_dashboards.py and re-run it, don't hand-edit the JSON.
 providers:
   - name: private-ai-stack
     folder: Private AI stack
     type: file
-    options: { path: /var/lib/grafana/dashboards, foldersFromFilesStructure: false }
+    options: { path: /var/lib/grafana/dashboards/stack, foldersFromFilesStructure: false }
+  - name: gameplan
+    folder: Gameplan
+    type: file
+    options: { path: /var/lib/grafana/dashboards/gameplan, foldersFromFilesStructure: false }

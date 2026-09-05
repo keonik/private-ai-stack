@@ -63,6 +63,60 @@ RULES = [
          "On macOS this is the colima / Docker Desktop VM, not the Mac. Raise the VM memory or trim services."),
 ]
 
+# Gameplan Network shares this Mac. Its rules live in their own group so they can be silenced
+# without touching the stack's, and route through the same contact point.
+GAMEPLAN_RULES = [
+    rule("gp-pipeline-stale", "Crash-report pipeline has not completed a run",
+         "time() - gameplan_pipeline_last_run_completed_timestamp_seconds", "gt", 6 * 3600, "10m", "critical",
+         "No crash-report download run has finished in {{ $values.A.Value | humanizeDuration }}",
+         "The hourly pipeline runs 04:00-23:00, so a healthy overnight gap already reaches five hours - hence the "
+         "six-hour threshold rather than something tighter. Check automation/daily.log on glazed and whether cron ran."),
+    rule("gp-download-failures", "Crash-report fetches are failing",
+         'gameplan_pipeline_last_run_reports{outcome="failed"} / clamp_min(gameplan_pipeline_last_run_reports{outcome="found"}, 1)',
+         "gt", 0.5, "0s", "critical",
+         "{{ $values.A.Value | humanizePercentage }} of the reports the portal listed failed to download",
+         "The portal answering with something that is not a PDF is the anti-bot arms race, not a network blip. "
+         "See the crash-portal-download-campaign playbook in the gameplan repo before changing anything."),
+    rule("gp-counties-failing", "Counties failing in the download run",
+         'gameplan_pipeline_last_run_counties{outcome="failed"}', "gt", 10, "0s", "warning",
+         "{{ $values.A.Value | printf \"%.0f\" }} counties failed in the last run",
+         "A handful failing is routine. Ten or more at once is the portal, not the counties."),
+    rule("gp-portal-escalating", "Portal breaker is escalating",
+         "gameplan_portal_breaker_fruitless_trips", "gt", 3, "30m", "warning",
+         "The portal circuit breaker has tripped {{ $values.A.Value | printf \"%.0f\" }} times without getting anywhere",
+         "Request spacing is ratcheting up and the pipeline is standing down. Check the egress tile: the crash portal "
+         "wants the VPN off, and a run on the wrong network looks exactly like this."),
+    rule("gp-worker-down", "Gameplan worker not scrapeable", 'up{job="gameplan-worker"}', "lt", 1, "5m", "critical",
+         "The Gameplan worker is not answering /metrics",
+         "launchctl list | grep gameplan-worker, and ~/Library/Logs/gameplan-worker.log. If the process is alive, "
+         "WORKER_API_KEY in stack/.env may no longer match the worker's - the scrape sends it as a header."),
+    rule("gp-worker-dependency", "A worker dependency is unreachable",
+         "min by (dependency) (gameplan_worker_dependency_up)", "lt", 1, "10m", "warning",
+         "The worker cannot reach {{ $labels.dependency }}",
+         "ocrmypdf missing breaks OCR for scanned reports. The vision endpoint being down breaks CAPTCHA solving, "
+         "which fails silently: nothing errors until a scraper meets a CAPTCHA and downloads stall."),
+    rule("gp-worker-queue", "Work is queueing on the worker",
+         "max by (pool) (gameplan_worker_pool_queued)", "gt", 5, "15m", "warning",
+         "{{ $values.A.Value | printf \"%.0f\" }} calls waiting on the {{ $labels.pool }} pool",
+         "Sustained queueing means demand is above MAX_BROWSER_CONCURRENCY / MAX_OCR_CONCURRENCY, or a job is wedged "
+         "holding a slot."),
+    rule("gp-shadow-regression", "A field the geometry parser used to read has regressed",
+         "min(gameplan_shadow_field_match_ratio)", "lt", 0.98, "1h", "warning",
+         "Worst field agreement is {{ $values.A.Value | humanizePercentage }}",
+         "The shadow compares the production parser against the geometry parser on real PDFs. One field dropping is "
+         "the signal an aggregate parity number would hide. See automation/shadow-out."),
+    rule("gp-reconcile-silent", "The nightly reconcile has not run",
+         'time() - gameplan_cron_log_updated_timestamp_seconds{job="reconcile"}', "gt", 26 * 3600, "10m", "warning",
+         "Nothing has been written to reconcile.log in {{ $values.A.Value | humanizeDuration }}",
+         "Reconcile runs at 00:10 daily. It also waits on the VPN reconcile lock, so a stuck vpnctl can hold it off."),
+    rule("gp-exporter-source", "The pipeline exporter cannot read a source",
+         "min by (source) (gameplan_pipeline_source_up)", "lt", 1, "30m", "warning",
+         "The exporter cannot read {{ $labels.source }}",
+         "Every Gameplan pipeline panel is downstream of these files. A source that stopped being readable looks "
+         "exactly like a quiet healthy system, which is why it alerts."),
+]
+
 OUT.write_text(json.dumps({"apiVersion": 1, "groups": [
-    {"orgId": 1, "name": "private-ai-stack", "folder": "Private AI stack", "interval": "1m", "rules": RULES}]}, indent=1))
-print(f"wrote {OUT.name}: {len(RULES)} rules")
+    {"orgId": 1, "name": "private-ai-stack", "folder": "Private AI stack", "interval": "1m", "rules": RULES},
+    {"orgId": 1, "name": "gameplan", "folder": "Gameplan", "interval": "1m", "rules": GAMEPLAN_RULES}]}, indent=1))
+print(f"wrote {OUT.name}: {len(RULES)} stack rules, {len(GAMEPLAN_RULES)} gameplan rules")

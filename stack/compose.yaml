@@ -135,9 +135,11 @@ services:
     restart: unless-stopped
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
+      # Gameplan's worker gates /metrics behind the same key as its other routes.
+      WORKER_API_KEY: ${WORKER_API_KEY:-}
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - sed "s|__LITELLM_KEY__|$$LITELLM_MASTER_KEY|" /etc/prometheus/prometheus.tpl.yml > /prometheus/prometheus.yml
+      - sed -e "s|__LITELLM_KEY__|$$LITELLM_MASTER_KEY|" -e "s|__WORKER_KEY__|$$WORKER_API_KEY|" /etc/prometheus/prometheus.tpl.yml > /prometheus/prometheus.yml
         && exec prometheus --config.file=/prometheus/prometheus.yml --storage.tsdb.path=/prometheus/data
         --storage.tsdb.retention.time=${METRICS_RETENTION:-30d} --web.enable-lifecycle
     volumes:
@@ -184,6 +186,13 @@ services:
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Gameplan's cron pipelines are not containers, so their logs only reach Loki by being read
+      # off the host filesystem. Directories only: single-file bind mounts wedged the colima daemon
+      # outright, and the two files worth having (~/Desktop/integration.log, ~/Library/Logs) sit
+      # under macOS-privacy-protected paths the VM cannot read anyway. The worker's own structured
+      # logs live inside the repo, so they come in with the second mount.
+      - ${GAMEPLAN_DIR:-/Users/glazed/Development/gameplan}/automation:/gameplan/automation:ro
+      - ${GAMEPLAN_DIR:-/Users/glazed/Development/gameplan}/worker/logs:/gameplan/worker-logs:ro
     depends_on: [loki]
 
   alert-relay:

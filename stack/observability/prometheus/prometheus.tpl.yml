@@ -1,4 +1,5 @@
-# Rendered to /prometheus/prometheus.yml at container start (the LiteLLM key is substituted in; see compose).
+# Rendered to /prometheus/prometheus.yml at container start (the LiteLLM and worker keys are
+# substituted in; see compose).
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -46,6 +47,25 @@ scrape_configs:
   # The Mac itself: disk, memory, load. Runs on the host because a container cannot see macOS.
   - job_name: host
     static_configs: [{ targets: ["host.docker.internal:9419"] }]
+
+  # ---- Gameplan (github.com/offbyone-ai/gameplan-network), which also runs on this Mac ----
+
+  # The worker service: browser/OCR semaphore occupancy, request rates, ocrmypdf and vision health.
+  # /metrics sits behind the same API key as the rest of the worker, so the key is sent as a header.
+  # An unset WORKER_API_KEY renders an empty header and the scrape 401s — visible as up == 0 rather
+  # than as silence.
+  - job_name: gameplan-worker
+    http_headers:
+      x-worker-api-key:
+        values: ["__WORKER_KEY__"]
+    static_configs: [{ targets: ["host.docker.internal:4000"] }]
+
+  # The automation host exporter: last-run outcomes for the hourly download, the portal circuit
+  # breaker, the geometry-parser shadow and cron-log freshness. Those jobs are crons that exit, so
+  # this long-lived exporter reads the state files they leave behind. Runs on the host under launchd
+  # (dev.private-ai-stack.gameplan-pipeline), same reason as the host exporter above.
+  - job_name: gameplan-pipeline
+    static_configs: [{ targets: ["host.docker.internal:9420"] }]
 
   # Tunnel health: the same services as seen from the internet. Targets live in public-targets.json,
   # which is gitignored so hostnames stay out of the repo; copy public-targets.example.json to start.
