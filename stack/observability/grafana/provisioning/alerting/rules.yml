@@ -1003,7 +1003,71 @@
        "datasourceUid": "prom",
        "model": {
         "refId": "A",
-        "expr": "up{job=\"gameplan-worker\"}",
+        "expr": "up{job=\"gameplan-worker\"} and max_over_time(up{job=\"gameplan-worker\"}[7d]) > 0",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "lt",
+           "params": [
+            1
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "gp-exporter-down",
+     "title": "Gameplan pipeline exporter not scrapeable",
+     "condition": "C",
+     "for": "10m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "The Gameplan pipeline exporter is not answering on :9420",
+      "description": "launchctl list | grep gameplan-pipeline, and ~/Library/Logs/private-ai-stack.gameplan-pipeline.log. Every Gameplan pipeline panel goes blank while this is down."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "up{job=\"gameplan-pipeline\"} and max_over_time(up{job=\"gameplan-pipeline\"}[7d]) > 0",
         "instant": true,
         "intervalMs": 15000,
         "maxDataPoints": 100

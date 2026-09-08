@@ -91,10 +91,32 @@ GAMEPLAN_RULES = [
          "The portal circuit breaker has tripped {{ $values.A.Value | printf \"%.0f\" }} times without getting anywhere",
          "Request spacing is ratcheting up and the pipeline is standing down. Check the egress tile: the crash portal "
          "wants the VPN off, and a run on the wrong network looks exactly like this."),
-    rule("gp-worker-down", "Gameplan worker not scrapeable", 'up{job="gameplan-worker"}', "lt", 1, "5m", "critical",
+    # The `and max_over_time(...[7d]) > 0` guard is load-bearing, not decoration.
+    # A scrape job exists in prometheus.tpl.yml from the moment it is written,
+    # but the endpoint it points at only exists once that code is deployed — so
+    # the bare `up < 1` version of this rule paged every 4 hours for three days
+    # about a worker that had never served /metrics in the first place. With the
+    # guard the series is empty until the target has been up at least once, which
+    # is NoData, which this file treats as OK.
+    #
+    # Trade-off, deliberately accepted: a target down for more than 7 continuous
+    # days falls out of the window and self-silences. Anything down that long is
+    # not news an alert should still be delivering.
+    rule("gp-worker-down", "Gameplan worker not scrapeable",
+         'up{job="gameplan-worker"} and max_over_time(up{job="gameplan-worker"}[7d]) > 0',
+         "lt", 1, "5m", "critical",
          "The Gameplan worker is not answering /metrics",
          "launchctl list | grep gameplan-worker, and ~/Library/Logs/gameplan-worker.log. If the process is alive, "
          "WORKER_API_KEY in stack/.env may no longer match the worker's - the scrape sends it as a header."),
+    # Same guard, same reason. This is also the only rule that catches the
+    # exporter dying outright: gp-exporter-source reads a metric the exporter
+    # itself publishes, so a dead exporter makes it NoData rather than firing.
+    rule("gp-exporter-down", "Gameplan pipeline exporter not scrapeable",
+         'up{job="gameplan-pipeline"} and max_over_time(up{job="gameplan-pipeline"}[7d]) > 0',
+         "lt", 1, "10m", "warning",
+         "The Gameplan pipeline exporter is not answering on :9420",
+         "launchctl list | grep gameplan-pipeline, and ~/Library/Logs/private-ai-stack.gameplan-pipeline.log. "
+         "Every Gameplan pipeline panel goes blank while this is down."),
     rule("gp-worker-dependency", "A worker dependency is unreachable",
          "min by (dependency) (gameplan_worker_dependency_up)", "lt", 1, "10m", "warning",
          "The worker cannot reach {{ $labels.dependency }}",
