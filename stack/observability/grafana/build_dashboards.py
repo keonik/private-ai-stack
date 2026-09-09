@@ -193,7 +193,7 @@ R.append(row("Logs", 20))
 R.append(logs("rag-ingest", '{service="rag-ingest"} != "GET /metrics" != "GET /health"', (0, 21, 24, 10)))
 (OUT / "rag.json").write_text(json.dumps(dashboard("pas-rag", "Private AI stack — RAG service", R, ["private-ai-stack"]), indent=1))
 # ------------------------------------------------------------------ gameplan
-# Gameplan Network (github.com/offbyone-ai/gameplan-network) shares this Mac: a worker service under
+# Gameplan, a private project, shares this Mac: a worker service under
 # launchd, and four cron pipelines that start, work and exit. Metrics come from two places — the
 # worker's own /metrics, and the pipeline exporter that reads the state files the crons leave behind.
 _id = 300

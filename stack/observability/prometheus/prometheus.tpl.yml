@@ -48,7 +48,7 @@ scrape_configs:
   - job_name: host
     static_configs: [{ targets: ["host.docker.internal:9419"] }]
 
-  # ---- Gameplan (github.com/offbyone-ai/gameplan-network), which also runs on this Mac ----
+  # ---- Gameplan, a private project that also runs on this Mac ----
 
   # The worker service: browser/OCR semaphore occupancy, request rates, ocrmypdf and vision health.
   # /metrics sits behind the same API key as the rest of the worker, so the key is sent as a header.

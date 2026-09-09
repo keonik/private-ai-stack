@@ -189,7 +189,7 @@ services:
       # Gameplan's cron pipelines are not containers, so their logs only reach Loki by being read
       # off the host filesystem. A directory, never a single file: a one-file bind mount wedged the
       # colima VM's host-bind layer outright (see the Gameplan section of the README).
-      - ${GAMEPLAN_DIR:-/Users/glazed/Development/gameplan}/automation:/gameplan/automation:ro
+      - ${GAMEPLAN_DIR:-./observability/gameplan-logs}/automation:/gameplan/automation:ro
     depends_on: [loki]
 
   alert-relay:

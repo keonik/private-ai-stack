@@ -379,7 +379,7 @@ the only tier that requires touching the application.
 
 ## Gameplan on the same machine
 
-[Gameplan Network](https://github.com/offbyone-ai/gameplan-network) runs on this Mac alongside the
+Gameplan, a private project of mine, runs on this Mac alongside the
 stack, and it is monitored from here rather than from a second Grafana. It has its own dashboard
 folder, its own alert group, and nothing it adds touches the AI stack's own signals.
 
