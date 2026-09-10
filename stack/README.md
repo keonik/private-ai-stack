@@ -347,7 +347,7 @@ keepalive agent then include these services, so they come back with everything e
 | Loki + Alloy | every container's stdout/stderr, 14 days, searchable by service | Alloy discovers compose containers over the socket |
 | Grafana | the dashboards and alerts below (port 3001 is open on the LAN like the chat UI, so give `GRAFANA_PASSWORD` a real value); also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
 | alert-relay | turns Grafana's alert JSON into a notification a person can read on a phone | 90 lines of stdlib Python (`observability/alert-relay/relay.py`) |
-| gameplan-pipeline | last-run outcomes, portal-breaker state and parser-shadow parity for the Gameplan crons that share this Mac | a Bun exporter in the gameplan repo, on the host under launchd (see below) |
+| your own overlay | anything else on this machine — see "Monitoring something else on this machine" below | gitignored files the generators and compose pick up when present |
 
 ## Adding another service
 
@@ -377,59 +377,43 @@ two gateways and an API) and one dev instance that is watched but never alerts. 
 job to `observability/prometheus/prometheus.tpl.yml` pointing at it, and build panels from there. That is
 the only tier that requires touching the application.
 
-## Gameplan on the same machine
+## Monitoring something else on this machine
 
-Gameplan, a private project of mine, runs on this Mac alongside the
-stack, and it is monitored from here rather than from a second Grafana. It has its own dashboard
-folder, its own alert group, and nothing it adds touches the AI stack's own signals.
+Most machines run more than one thing. The stack can watch the rest of what is on this box without
+any of it being committed here, through a **local overlay**: a handful of gitignored paths the
+generators and the compose file pick up when they exist, and ignore when they do not.
 
-The awkward part is that Gameplan is not one service. It is a long-running worker plus four cron
-pipelines that start, do their work and exit — so half of it can never be scraped while it is
-running. That is handled in two pieces:
+| what you want | where it goes (all gitignored) |
+|---|---|
+| extra scrape jobs, including ones needing a bearer key | `observability/prometheus/local-scrape.yml`, appended to the rendered config at container start; `__LOCAL_KEY__` is filled from `LOCAL_SCRAPE_KEY` |
+| log files that are not container stdout | `observability/alloy/local.alloy` — Alloy loads every `.alloy` file in that directory |
+| dashboards | `stack/local/build_*_local.py`, run automatically by `build_dashboards.py` with the same panel helpers, writing into its own folder under `dashboards/` |
+| alert rules | `stack/local/alerts_*_local.py`, run by `build_alerts.py`, writing `rules-local.yml` next to the stack rules |
+| a Grafana folder for them | `provisioning/dashboards/dashboards-local.yml` |
+| launchd agents (a host-side exporter, say) | `stack/local/launchd/*.plist`, installed by `install-launchd.sh` along with the rest |
 
-| piece | what it gives you | where it comes from |
-|---|---|---|
-| `gameplan-worker` scrape | browser and OCR semaphore occupancy, request rate and p95 by route, person-search outcomes, ocrmypdf and vision-model health | the worker's own `/metrics` on `:4000`, behind its API key |
-| `gameplan-pipeline` scrape | last download run's county/report outcomes, portal circuit-breaker cooldown and escalation, geometry-parser shadow parity per field, cron log freshness | `automation/src/observability/exporter.ts` in the gameplan repo, on `:9420` |
-| Loki | the cron pipelines' logs, labelled `job="gameplan"` with a `pipeline` label per job | Alloy reads them off the host filesystem; they are files, not container stdout |
+Point `LOCAL_LOGS_DIR` at a host directory and it is mounted read-only at `/hostlogs` for those log
+sources to read.
 
-**The worker scrape needs a key.** `/metrics` sits behind the same `x-worker-api-key` as the rest of
-the worker, so `WORKER_API_KEY` in `.env` must match the worker's, and Prometheus sends it as an
-`http_headers` entry. Leave it unset and the job simply reports down — nothing else is affected.
+Three things learned doing this for a real application on this machine, none of which are obvious:
 
-**The pipeline exporter reads files, not logs.** The pipeline already writes a per-run summary JSON,
-a portal-breaker state file and a shadow ledger; the exporter turns those into gauges. Built that way
-on purpose: those files are written by the code that has the real numbers, so a change to the human
-log format cannot silently flatten a dashboard. Each reader publishes its own `..._source_up`,
-because an exporter that quietly stops reading looks exactly like a healthy quiet system.
+**Export from state files, not from logs.** A cron job that starts, works and exits cannot be scraped
+while it runs. If it already writes a summary or state file, have a long-lived exporter read *that*
+rather than parsing its log: the file is written by the code with the real numbers, so a change to
+the human-readable log format cannot silently flatten a dashboard.
 
-It runs under launchd from the **live** gameplan checkout — the same one cron runs — so it reports the
-behaviour of the code actually in production and picks up changes on the hourly `git pull`:
+**Have every reader publish its own `..._source_up`.** An exporter that quietly stops reading one of
+its inputs looks exactly like a healthy, quiet system. That gauge is the difference between noticing
+and not.
 
-```bash
-./scripts/install-launchd.sh          # installs dev.private-ai-stack.gameplan-pipeline with the rest
-curl -s localhost:9420/metrics | head
-```
+**Mount directories, never single files.** Under colima with `virtiofs`, a one-file bind mount wedged
+the VM's host-bind layer outright: a new container hung in `Created`, a freshly recreated Prometheus
+sat "running" with its `sed` blocked on the mounted config and a zero-byte output, and both
+`docker inspect` and `docker rm -f` hung on the affected containers while the daemon was otherwise
+healthy. Only `colima restart` cleared it. Mount the parent directory.
 
-**Log collection is directories only.** Alloy bind-mounts `$GAMEPLAN_DIR/automation` and
-`$GAMEPLAN_DIR/worker/logs` read-only. Two things it deliberately does *not* mount: the integrations
-cron writes to `~/Desktop`, and the worker's launchd log lives in `~/Library/Logs` — both are paths
-macOS privacy protection keeps out of the Docker VM. Their freshness is still tracked as a metric,
-because the exporter runs on the host and can read them.
-
-> Adding a **single-file** bind mount here is what you must not do. Under colima with `virtiofs` a
-> one-file mount wedged the VM's host-bind layer outright: the new Alloy container hung in `Created`,
-> a freshly recreated Prometheus sat "running" with its `sed` blocked reading the mounted config and
-> a zero-byte output, and `docker inspect`/`docker rm -f` on the affected containers hung with the
-> daemon otherwise healthy. Only `colima restart` cleared it. Mount the directory.
-
-**Alerts** (in the `Gameplan` folder, same contact point as everything else): no completed download
-run in six hours — the hourly pipeline runs 04:00–23:00, so a healthy overnight gap already reaches
-five; more than half of the listed reports failing to download, which is the anti-bot arms race
-rather than a network blip; ten or more counties failing at once; the portal breaker escalating; the
-worker unscrapeable or missing a dependency; sustained queueing on a worker pool; a shadow field
-whose agreement dropped; the nightly reconcile silent for 26 hours; and any exporter source becoming
-unreadable.
+Two paths macOS will not let into the Docker VM at all, whatever you mount: `~/Desktop` and
+`~/Library/Logs`. If something writes there, track its freshness with a host-side exporter instead.
 
 ## The Mac itself
 

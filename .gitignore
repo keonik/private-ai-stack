@@ -30,3 +30,14 @@ stack/observability/prometheus/public-targets.json
 *~
 stack/observability/prometheus/internal-targets.json
 extract/out/
+
+# Local overlay: monitoring for things on this machine that are not part of this repo.
+stack/local/
+stack/observability/prometheus/local-scrape.yml
+stack/observability/alloy/local.alloy
+stack/observability/grafana/provisioning/dashboards/dashboards-local.yml
+stack/observability/grafana/provisioning/alerting/rules-local.yml
+stack/observability/grafana/dashboards/*
+!stack/observability/grafana/dashboards/stack/
+stack/observability/local-logs/*
+!stack/observability/local-logs/.gitkeep

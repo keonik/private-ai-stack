@@ -1,6 +1,6 @@
-"""Score LLM-extracted sidecars against a rule-based parser's output (scripts/gameplan_dump.ts).
+"""Score LLM-extracted sidecars against a rule-based parser's output (scripts/rule_parser_dump.ts).
 
-    python scripts/compare_gameplan.py gameplan.jsonl ../stack/data/inbox
+    python scripts/compare_rule_parser.py parser.jsonl ../stack/data/inbox
 
 Fields both sides produce are compared exactly (after normalisation); booleans get a confusion matrix.
 The rule-based side reads coded boxes (injury severity per unit, unit-in-error 98 = animal) that the LLM

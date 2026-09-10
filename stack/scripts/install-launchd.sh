@@ -6,7 +6,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 STACK=$PWD; DEST=$HOME/Library/LaunchAgents; UID_=$(id -u)
-for f in launchd/*.plist; do
+# local/launchd/ is gitignored: agents for things on this machine that are not part of this repo.
+for f in launchd/*.plist local/launchd/*.plist; do
+  [ -e "$f" ] || continue
   label=$(basename "$f" .plist)
   launchctl bootout "gui/$UID_/$label" 2>/dev/null || true
   if [ "${1:-}" = remove ]; then rm -f "$DEST/$label.plist"; echo "removed $label"; continue; fi

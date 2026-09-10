@@ -7,9 +7,7 @@ from pathlib import Path
 
 # One directory per provisioned Grafana folder — see provisioning/dashboards/dashboards.yml.
 OUT = Path(__file__).parent / "dashboards/stack"
-OUT_GAMEPLAN = Path(__file__).parent / "dashboards/gameplan"
 OUT.mkdir(parents=True, exist_ok=True)
-OUT_GAMEPLAN.mkdir(parents=True, exist_ok=True)
 PROM, LOKI, SPEND = {"type": "prometheus", "uid": "prom"}, {"type": "loki", "uid": "loki"}, {"type": "grafana-postgresql-datasource", "uid": "spend"}
 _id = 0
 
@@ -192,118 +190,14 @@ R.append(ts("Files indexed / skipped / removed per hour", ["sum by (result) (inc
 R.append(row("Logs", 20))
 R.append(logs("rag-ingest", '{service="rag-ingest"} != "GET /metrics" != "GET /health"', (0, 21, 24, 10)))
 (OUT / "rag.json").write_text(json.dumps(dashboard("pas-rag", "Private AI stack — RAG service", R, ["private-ai-stack"]), indent=1))
-# ------------------------------------------------------------------ gameplan
-# Gameplan, a private project, shares this Mac: a worker service under
-# launchd, and four cron pipelines that start, work and exit. Metrics come from two places — the
-# worker's own /metrics, and the pipeline exporter that reads the state files the crons leave behind.
-_id = 300
-G = []
-_y = [0]
 
-OK_FAIL = [{"type": "value", "options": {"0": {"text": "FAILED", "color": "red"},
-                                         "0.5": {"text": "PARTIAL", "color": "orange"},
-                                         "1": {"text": "OK", "color": "green"}}}]
-GREEN_RED = {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "red", "value": 1}]}
-AGE = {"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 6 * 3600}, {"color": "red", "value": 12 * 3600}]}
+# ------------------------------------------------------------------ local overlay
+# Anything else on this machine that you want dashboards for lives outside this repo: drop a
+# build_*_local.py in stack/local/ (gitignored) and it runs here with the same helpers, writing to
+# its own folder under dashboards/. Nothing private has to be committed to be monitored.
+if __name__ == "__main__":  # not when an overlay imports these helpers
+    import runpy
 
-G.append(row("Last download run", _y[0])); down(1)
-G.append(stat("Since last run", "time() - gameplan_pipeline_last_run_completed_timestamp_seconds", at(4, 4, 0), "s",
-              thresholds=AGE, decimals=0,
-              desc="The hourly pipeline runs 04:00–23:00, so a healthy overnight gap reaches five hours. "
-                   "Orange starts after six."))
-G.append(stat("Reports downloaded", 'gameplan_pipeline_last_run_reports{outcome="downloaded"}', at(4, 4, 4), decimals=0,
-              desc="Zero is normal and common: a report already in the database is skipped, not re-fetched. "
-                   "Read this next to 'Report fetches failed', which is the number that means trouble."))
-G.append(stat("Report fetches failed", 'gameplan_pipeline_last_run_reports{outcome="failed"}', at(4, 4, 8), decimals=0,
-              thresholds=GREEN_RED,
-              desc="The portal answering with something that is not a PDF lands here. A sustained non-zero value "
-                   "is the anti-bot arms race, not a network blip."))
-G.append(stat("Counties failed", 'gameplan_pipeline_last_run_counties{outcome="failed"}', at(4, 4, 12), decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 10}]}))
-G.append(stat("Run duration", "gameplan_pipeline_last_run_duration_seconds", at(4, 4, 16), "s", decimals=0))
-G.append(stat("Run outcome", "gameplan_pipeline_last_run_ok", at(4, 4, 20), mappings=OK_FAIL, legend="{{job}}",
-              thresholds={"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "orange", "value": 0.5}, {"color": "green", "value": 1}]},
-              desc="Recomputed from the run's own county counts, the same way the pipeline derives what it reports "
-                   "to the server — not read back out of a log line. The label says which entrypoint wrote it: the "
-                   "hourly pipeline and the nightly reconcile both produce these.")); down(4)
-
-G.append(ts("Reports per run, by outcome", ["gameplan_pipeline_last_run_reports"], at(12, 7, 0), "short", legend="{{outcome}}",
-            desc="Stepped, not rated: each point is the last completed run, so the line is flat between runs."))
-G.append(ts("Counties per run, by outcome", ["gameplan_pipeline_last_run_counties"], at(12, 7, 12), "short", legend="{{outcome}}")); down(7)
-
-G.append(row("Portal pushback", _y[0])); down(1)
-G.append(stat("Breaker cooldown left", "gameplan_portal_breaker_cooldown_remaining_seconds", at(4, 4, 0), "s", decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 3600}]},
-              desc="Non-zero means the pipeline is deliberately standing down because the portal flagged it."))
-G.append(stat("Request spacing", "gameplan_portal_breaker_spacing_seconds", at(4, 4, 4), "s", decimals=1,
-              desc="Adapted gap between portal requests. It ratchets up under pushback and decays when things are quiet."))
-G.append(stat("Escalation", "gameplan_portal_breaker_fruitless_trips", at(4, 4, 8), decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 2}, {"color": "red", "value": 4}]},
-              desc="Consecutive breaker trips that yielded nothing."))
-G.append(stat("CAPTCHAs last run", "gameplan_pipeline_last_run_captcha_attempts", at(4, 4, 12), decimals=0,
-              desc="The leading indicator: CAPTCHA volume climbs before downloads start failing."))
-G.append(stat("Egress", "gameplan_portal_breaker_egress_info", at(8, 4, 16), legend="{{egress}}",
-              desc="Which network the breaker state was learned on. The crash portal wants the VPN off and "
-                   "person-search wants it on, so this is worth a glance when downloads misbehave.")); down(4)
-G.append(ts("Spacing and cooldown", [{"expr": "gameplan_portal_breaker_spacing_seconds", "legendFormat": "spacing"},
-                                     {"expr": "gameplan_portal_breaker_cooldown_remaining_seconds", "legendFormat": "cooldown left"}], at(12, 7, 0), "s"))
-G.append(ts("CAPTCHA attempts per run", ["gameplan_pipeline_last_run_captcha_attempts"], at(12, 7, 12), "short", legend="attempts")); down(7)
-
-G.append(row("Worker service", _y[0])); down(1)
-G.append(stat("Worker", 'up{job="gameplan-worker"}', at(3, 4, 0), mappings=UPDOWN, thresholds=RED_GREEN,
-              desc="Scraped directly at :4000/metrics with the worker API key. DOWN here with the process alive "
-                   "usually means WORKER_API_KEY in stack/.env no longer matches the worker's."))
-G.append(stat("ocrmypdf", 'gameplan_worker_dependency_up{dependency="ocrmypdf"}', at(3, 4, 3), mappings=UPDOWN, thresholds=RED_GREEN))
-G.append(stat("Vision model", "gameplan_worker_vision_model_served", at(3, 4, 6), mappings=UPDOWN, thresholds=RED_GREEN,
-              desc="Whether the endpoint actually serves the configured VISION_MODEL. When this goes DOWN nothing "
-                   "errors until a scraper meets a CAPTCHA, and then downloads stall with no obvious cause."))
-G.append(stat("Browsers busy", 'gameplan_worker_pool_active{pool="browser"}', at(3, 4, 9), decimals=0))
-G.append(stat("Browsers queued", 'gameplan_worker_pool_queued{pool="browser"}', at(3, 4, 12), decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}))
-G.append(stat("OCR busy", 'gameplan_worker_pool_active{pool="ocr"}', at(3, 4, 15), decimals=0))
-G.append(stat("OCR queued", 'gameplan_worker_pool_queued{pool="ocr"}', at(3, 4, 18), decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}, {"color": "red", "value": 5}]}))
-G.append(stat("Worker uptime", "gameplan_worker_uptime_seconds", at(3, 4, 21), "s", decimals=0)); down(4)
-
-G.append(ts("Requests per minute, by route", ["sum by (route) (rate(gameplan_worker_http_requests_total[5m])) * 60"], at(8, 7, 0), "reqpm", legend="{{route}}", stack=True))
-G.append(ts("Request latency p95, by route", ["histogram_quantile(0.95, sum by (le, route) (rate(gameplan_worker_http_request_duration_seconds_bucket[10m])))"], at(8, 7, 8), "s", legend="{{route}}"))
-G.append(ts("Non-2xx responses per minute", ['sum by (route, status) (rate(gameplan_worker_http_requests_total{status!~"2.."}[5m])) * 60 or vector(0)'], at(8, 7, 16), "reqpm", legend="{{route}} {{status}}")); down(7)
-G.append(ts("Person searches per hour, by outcome", ["sum by (status) (increase(gameplan_worker_person_search_total[1h]))"], at(8, 7, 0), "short", legend="{{status}}", stack=True,
-            desc="'rate-limited' and 'error' climbing together means the free scrapers are being blocked — and every "
-                 "search that fails here falls back to paid Enformion on the server."))
-G.append(ts("Person search p95 duration", ["histogram_quantile(0.95, sum by (le) (rate(gameplan_worker_person_search_duration_seconds_bucket[30m])))"], at(8, 7, 8), "s", legend="p95",
-            desc="Includes time queued on the browser semaphore."))
-G.append(ts("OCR runs per hour, by outcome", ["sum by (outcome) (increase(gameplan_worker_ocr_runs_total[1h]))"], at(8, 7, 16), "short", legend="{{outcome}}", stack=True)); down(7)
-
-G.append(row("Geometry-parser shadow", _y[0])); down(1)
-G.append(stat("Reports compared", 'gameplan_shadow_reports{outcome="compared"}', at(4, 4, 0), decimals=0))
-G.append(stat("Differing", 'gameplan_shadow_reports{outcome="differs"}', at(4, 4, 4), decimals=0,
-              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}))
-G.append(stat("Errors", 'gameplan_shadow_reports{outcome="errors"}', at(4, 4, 8), decimals=0, thresholds=GREEN_RED))
-G.append(stat("Worst field agreement", "min(gameplan_shadow_field_match_ratio)", at(4, 4, 12), "percentunit", decimals=2,
-              thresholds={"mode": "absolute", "steps": [{"color": "red", "value": None}, {"color": "orange", "value": 0.98}, {"color": "green", "value": 0.999}]},
-              desc="An aggregate parity number hides the one field that regressed, so this tracks the worst field."))
-G.append(stat("Pages compared", "gameplan_shadow_pages", at(4, 4, 16), decimals=0))
-G.append(stat("Ledger age", "time() - gameplan_shadow_updated_timestamp_seconds", at(4, 4, 20), "s", decimals=0, thresholds=AGE)); down(4)
-G.append(ts("Fields that do not fully agree", ["gameplan_shadow_field_match_ratio < 1"], at(24, 7, 0), "percentunit", legend="{{field}}",
-            desc="Only fields below 100% are drawn — everything else agreeing is the normal case and would bury them.")); down(7)
-
-G.append(row("Cron freshness and logs", _y[0])); down(1)
-G.append(stat("Since each cron last wrote", "time() - gameplan_cron_log_updated_timestamp_seconds", at(12, 4, 0), "s",
-              legend="{{job}}", thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 26 * 3600}, {"color": "red", "value": 48 * 3600}]},
-              decimals=0, desc="daily runs hourly 04:00–23:00, shadow at :20 past those hours, reconcile at 00:10, "
-                               "integrations at :30. Reconcile and integrations are expected to look a day old."))
-G.append(stat("Since a run last completed", "time() - gameplan_pipeline_last_run_summary_written_timestamp_seconds", at(6, 4, 12), "s",
-              decimals=0, thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 5400}, {"color": "red", "value": 6 * 3600}]},
-              desc="A run that is killed mid-flight writes no summary, so this keeps climbing \u2014 which is how a dead "
-                   "run shows up. Orange past 90 min; the hourly pipeline\u2019s own runs are far shorter than that."))
-G.append(stat("Exporter sources readable", "gameplan_pipeline_source_up", at(6, 4, 18), mappings=UPDOWN, thresholds=RED_GREEN,
-              legend="{{source}}", desc="A source the exporter cannot read reports DOWN here rather than silently "
-                                        "exporting nothing, which would look like a healthy quiet system.")); down(4)
-G.append(logs("Pipeline errors and warnings", '{job="gameplan"} |~ "(?i)(error|warn|fail|not a valid pdf)"', at(24, 10))); down(10)
-G.append(logs("Hourly download pipeline", '{job="gameplan", pipeline="daily"}', at(24, 10))); down(10)
-
-G.sort(key=lambda d: (d["gridPos"]["y"], d["gridPos"]["x"]))
-(OUT_GAMEPLAN / "gameplan.json").write_text(json.dumps(dashboard("gp-overview", "Gameplan — pipeline & worker", G, ["gameplan"]), indent=1))
-
-print("wrote", sorted(str(p.relative_to(Path(__file__).parent)) for p in Path(__file__).parent.glob("dashboards/*/*.json")))
+    for _extra in sorted((Path(__file__).resolve().parents[2] / "local").glob("build_*_local.py")):
+        print("running local overlay:", _extra.name)
+        runpy.run_path(str(_extra), run_name="__main__")

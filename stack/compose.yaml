@@ -135,11 +135,12 @@ services:
     restart: unless-stopped
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY}
-      # Gameplan's worker gates /metrics behind the same key as its other routes.
-      WORKER_API_KEY: ${WORKER_API_KEY:-}
+      # Optional bearer key for a local-overlay scrape target (see observability/prometheus/local-scrape.yml).
+      LOCAL_SCRAPE_KEY: ${LOCAL_SCRAPE_KEY:-}
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - sed -e "s|__LITELLM_KEY__|$$LITELLM_MASTER_KEY|" -e "s|__WORKER_KEY__|$$WORKER_API_KEY|" /etc/prometheus/prometheus.tpl.yml > /prometheus/prometheus.yml
+      - sed -e "s|__LITELLM_KEY__|$$LITELLM_MASTER_KEY|" /etc/prometheus/prometheus.tpl.yml > /prometheus/prometheus.yml
+        && { [ -f /etc/prometheus/local-scrape.yml ] && sed -e "s|__LOCAL_KEY__|$$LOCAL_SCRAPE_KEY|" /etc/prometheus/local-scrape.yml >> /prometheus/prometheus.yml || true; }
         && exec prometheus --config.file=/prometheus/prometheus.yml --storage.tsdb.path=/prometheus/data
         --storage.tsdb.retention.time=${METRICS_RETENTION:-30d} --web.enable-lifecycle
     volumes:
@@ -182,14 +183,14 @@ services:
     profiles: ["obs"]
     image: grafana/alloy:v1.8.1
     restart: unless-stopped
-    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy"]  # every .alloy file, so a gitignored local.alloy is picked up
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Gameplan's cron pipelines are not containers, so their logs only reach Loki by being read
-      # off the host filesystem. A directory, never a single file: a one-file bind mount wedged the
-      # colima VM's host-bind layer outright (see the Gameplan section of the README).
-      - ${GAMEPLAN_DIR:-./observability/gameplan-logs}/automation:/gameplan/automation:ro
+      # Logs from non-containerised things on this host reach Loki only by being read off the
+      # filesystem. Mount a DIRECTORY, never a single file: a one-file bind mount wedged the colima
+      # VM's host-bind layer outright. See "Monitoring something else on this machine" in the README.
+      - ${LOCAL_LOGS_DIR:-./observability/local-logs}:/hostlogs:ro
     depends_on: [loki]
 
   alert-relay:

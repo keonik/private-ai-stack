@@ -153,8 +153,8 @@ method and to regression-test changes, not as a claim about scanned paper.
 ## Cross-check against a rule-based parser (free ground truth)
 
 The same 501 PDFs are processed by a separate, hand-written OH-1 parser (regexes over pdf.js text,
-maintained in another repo for a different product). `scripts/gameplan_dump.ts` runs that parser over
-the files and `scripts/compare_gameplan.py` scores the sidecars against it, field by field:
+maintained in another repository for a different product). `scripts/rule_parser_dump.ts` runs that parser over
+the files and `scripts/compare_rule_parser.py` scores the sidecars against it, field by field:
 
 | field | agree | of | note |
 |---|---|---|---|
@@ -180,12 +180,12 @@ extractor only sees the narrative. If a customer's question is "which crashes ha
 must come from the form's coded fields, and this is the measurement that proves it. The two injury
 extras are narratives that mention a transport to hospital where the officer coded no injury.
 
-Reproduce (the parser repo path is an env var; it is not part of this repo):
+Reproduce (the parser repo path is an env var; that repository is not part of this one):
 
 ```bash
 ls ../stack/data/inbox/oh1-*.pdf | sed 's|.*/oh1-2026-08-03-|$REPORTS/|' \
-  | xargs bun run scripts/gameplan_dump.ts > gameplan.jsonl      # 501 files, ~50 s
-python scripts/compare_gameplan.py gameplan.jsonl ../stack/data/inbox
+  | xargs bun run scripts/rule_parser_dump.ts > parser.jsonl    # 501 files, ~50 s
+python scripts/compare_rule_parser.py parser.jsonl ../stack/data/inbox
 ```
 
 ## Add a document type

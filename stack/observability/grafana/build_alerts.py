@@ -63,95 +63,6 @@ RULES = [
          "On macOS this is the colima / Docker Desktop VM, not the Mac. Raise the VM memory or trim services."),
 ]
 
-# Gameplan Network shares this Mac. Its rules live in their own group so they can be silenced
-# without touching the stack's, and route through the same contact point.
-GAMEPLAN_RULES = [
-    rule("gp-pipeline-stale", "Crash-report pipeline has not completed a run",
-         "time() - gameplan_pipeline_last_run_completed_timestamp_seconds", "gt", 6 * 3600, "10m", "critical",
-         "No crash-report download run has finished in {{ $values.A.Value | humanizeDuration }}",
-         "The hourly pipeline runs 04:00-23:00, so a healthy overnight gap already reaches five hours - hence the "
-         "six-hour threshold rather than something tighter. Check automation/daily.log on glazed and whether cron ran."),
-    rule("gp-run-failed", "A download run reported failure",
-         "min(gameplan_pipeline_last_run_ok)", "lt", 1, "0s", "warning",
-         "The last download run finished {{ if eq $values.A.Value 0.0 }}failed{{ else }}partial{{ end }}",
-         "Recomputed from the run's own county counts: 0.5 means some counties failed but others worked, 0 means "
-         "none succeeded. Check which counties on the dashboard before assuming the portal is the cause."),
-    rule("gp-download-failures", "Crash-report fetches are failing",
-         'gameplan_pipeline_last_run_reports{outcome="failed"} / clamp_min(gameplan_pipeline_last_run_reports{outcome="found"}, 1)',
-         "gt", 0.5, "0s", "critical",
-         "{{ $values.A.Value | humanizePercentage }} of the reports the portal listed failed to download",
-         "The portal answering with something that is not a PDF is the anti-bot arms race, not a network blip. "
-         "See the crash-portal-download-campaign playbook in the gameplan repo before changing anything."),
-    rule("gp-counties-failing", "Counties failing in the download run",
-         'gameplan_pipeline_last_run_counties{outcome="failed"}', "gt", 10, "0s", "warning",
-         "{{ $values.A.Value | printf \"%.0f\" }} counties failed in the last run",
-         "A handful failing is routine. Ten or more at once is the portal, not the counties."),
-    rule("gp-portal-escalating", "Portal breaker is escalating",
-         "gameplan_portal_breaker_fruitless_trips", "gt", 3, "30m", "warning",
-         "The portal circuit breaker has tripped {{ $values.A.Value | printf \"%.0f\" }} times without getting anywhere",
-         "Request spacing is ratcheting up and the pipeline is standing down. Check the egress tile: the crash portal "
-         "wants the VPN off, and a run on the wrong network looks exactly like this."),
-    # The `and max_over_time(...[7d]) > 0` guard is load-bearing, not decoration.
-    # A scrape job exists in prometheus.tpl.yml from the moment it is written,
-    # but the endpoint it points at only exists once that code is deployed — so
-    # the bare `up < 1` version of this rule paged every 4 hours for three days
-    # about a worker that had never served /metrics in the first place. With the
-    # guard the series is empty until the target has been up at least once, which
-    # is NoData, which this file treats as OK.
-    #
-    # Trade-off, deliberately accepted: a target down for more than 7 continuous
-    # days falls out of the window and self-silences. Anything down that long is
-    # not news an alert should still be delivering.
-    rule("gp-worker-down", "Gameplan worker not scrapeable",
-         'up{job="gameplan-worker"} and max_over_time(up{job="gameplan-worker"}[7d]) > 0',
-         "lt", 1, "5m", "critical",
-         "The Gameplan worker is not answering /metrics",
-         "launchctl list | grep gameplan-worker, and ~/Library/Logs/gameplan-worker.log. If the process is alive, "
-         "WORKER_API_KEY in stack/.env may no longer match the worker's - the scrape sends it as a header."),
-    # Same guard, same reason. This is also the only rule that catches the
-    # exporter dying outright: gp-exporter-source reads a metric the exporter
-    # itself publishes, so a dead exporter makes it NoData rather than firing.
-    rule("gp-exporter-down", "Gameplan pipeline exporter not scrapeable",
-         'up{job="gameplan-pipeline"} and max_over_time(up{job="gameplan-pipeline"}[7d]) > 0',
-         "lt", 1, "10m", "warning",
-         "The Gameplan pipeline exporter is not answering on :9420",
-         "launchctl list | grep gameplan-pipeline, and ~/Library/Logs/private-ai-stack.gameplan-pipeline.log. "
-         "Every Gameplan pipeline panel goes blank while this is down."),
-    rule("gp-worker-dependency", "A worker dependency is unreachable",
-         "min by (dependency) (gameplan_worker_dependency_up)", "lt", 1, "10m", "warning",
-         "The worker cannot reach {{ $labels.dependency }}",
-         "ocrmypdf missing breaks OCR for scanned reports. The vision endpoint being down breaks CAPTCHA solving, "
-         "which fails silently: nothing errors until a scraper meets a CAPTCHA and downloads stall."),
-    rule("gp-worker-queue", "Work is queueing on the worker",
-         "max by (pool) (gameplan_worker_pool_queued)", "gt", 5, "15m", "warning",
-         "{{ $values.A.Value | printf \"%.0f\" }} calls waiting on the {{ $labels.pool }} pool",
-         "Sustained queueing means demand is above MAX_BROWSER_CONCURRENCY / MAX_OCR_CONCURRENCY, or a job is wedged "
-         "holding a slot."),
-    rule("gp-shadow-regression", "A field the geometry parser used to read has regressed",
-         "min(gameplan_shadow_field_match_ratio)", "lt", 0.98, "1h", "warning",
-         "Worst field agreement is {{ $values.A.Value | humanizePercentage }}",
-         "The shadow compares the production parser against the geometry parser on real PDFs. One field dropping is "
-         "the signal an aggregate parity number would hide. See automation/shadow-out."),
-    rule("gp-run-incomplete", "A pipeline run never completed",
-         "time() - gameplan_pipeline_last_run_summary_written_timestamp_seconds", "gt", 5400, "10m", "warning",
-         "No download run has written a summary in {{ $values.A.Value | humanizeDuration }}",
-         "A run killed by the 3h watchdog, or one that died mid-flight, writes no summary at all — so this climbing "
-         "past an hourly cadence is how a dead run shows up. Fires well before gp-pipeline-stale, which is set wide "
-         "enough to sit through the 23:00-04:00 overnight gap."),
-    rule("gp-reconcile-silent", "The nightly reconcile has not run",
-         'time() - gameplan_cron_log_updated_timestamp_seconds{job="reconcile"}', "gt", 26 * 3600, "10m", "warning",
-         "Nothing has been written to reconcile.log in {{ $values.A.Value | humanizeDuration }}",
-         "Reconcile runs at 00:10 daily. It also waits on the VPN reconcile lock, so a stuck vpnctl can hold it off."),
-    rule("gp-exporter-source", "The pipeline exporter cannot read a source",
-         "min by (source) (gameplan_pipeline_source_up)", "lt", 1, "30m", "warning",
-         "The exporter cannot read {{ $labels.source }}",
-         "Every Gameplan pipeline panel is downstream of these files. A source that stopped being readable looks "
-         "exactly like a quiet healthy system, which is why it alerts."),
-]
-
-# Rules that once existed and must now be removed. Grafana's file provisioning
-# adds and updates rules but does NOT reap ones that simply vanish from the file
-# — a retired rule keeps evaluating and keeps paging until it is named here.
 RETIRED = [
     "gp-run-unfinished",   # replaced by gp-run-incomplete, which reads the summary's mtime
 ]
@@ -159,6 +70,16 @@ RETIRED = [
 OUT.write_text(json.dumps({"apiVersion": 1,
                            "deleteRules": [{"orgId": 1, "uid": uid} for uid in RETIRED],
                            "groups": [
-    {"orgId": 1, "name": "private-ai-stack", "folder": "Private AI stack", "interval": "1m", "rules": RULES},
-    {"orgId": 1, "name": "gameplan", "folder": "Gameplan", "interval": "1m", "rules": GAMEPLAN_RULES}]}, indent=1))
-print(f"wrote {OUT.name}: {len(RULES)} stack rules, {len(GAMEPLAN_RULES)} gameplan rules, {len(RETIRED)} retired")
+    {"orgId": 1, "name": "private-ai-stack", "folder": "Private AI stack", "interval": "1m", "rules": RULES}]}, indent=1))
+print(f"wrote {OUT.name}: {len(RULES)} stack rules, {len(RETIRED)} retired")
+
+# ---- local overlay ----
+# Alerts for anything else on this machine live outside this repo: an alerts_*_local.py in
+# stack/local/ (gitignored) writes its own rules-*.yml next to this one. Grafana provisions every
+# file in the alerting directory, so nothing private is committed to be paged about.
+if __name__ == "__main__":
+    import runpy
+
+    for _extra in sorted((Path(__file__).resolve().parents[2] / "local").glob("alerts_*_local.py")):
+        print("running local overlay:", _extra.name)
+        runpy.run_path(str(_extra), run_name="__main__")

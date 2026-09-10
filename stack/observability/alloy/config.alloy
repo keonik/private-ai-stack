@@ -22,35 +22,3 @@ loki.source.docker "containers" {
 loki.write "default" {
   endpoint { url = "http://loki:3100/loki/api/v1/push" }
 }
-
-// ---- Gameplan's cron pipelines, which are not containers ----------------------------------
-// The hourly download, nightly reconcile and geometry shadow run under cron and exit, so there is
-// no container stdout to follow — Alloy reads their log files off the host (mounted read-only in
-// compose). The `pipeline` label is what the Gameplan dashboard filters on.
-//
-// tail_from_end is load-bearing, not a preference: these logs are appended to forever and never
-// rotated. daily.log alone is ~500 MB, and the default (offset 0) would replay all of it into Loki
-// on every Alloy restart.
-//
-// Two things are deliberately NOT here. The worker's own structured logs: 16k per-minute-per-PID
-// files under worker/logs, one Loki stream each, which blew the active-stream limit outright and
-// had Loki answering 429 in a retry loop. The worker's operational signal is its /metrics; its
-// JSONL is a debugging artifact best read on the host. And the integrations cron, which writes to
-// ~/Desktop — a path macOS privacy protection keeps out of the Docker VM. Both still have their
-// freshness tracked as metrics by the pipeline exporter, which runs on the host.
-//
-// These logs carry no timestamp Alloy can parse (the pipeline prints HH:mm:ss with no date), so
-// entries are stamped with read time. Fine for "what happened just now"; do not read the first
-// minutes after an Alloy restart as a burst of activity.
-local.file_match "gameplan" {
-  path_targets = [
-    { __path__ = "/gameplan/automation/daily.log", job = "gameplan", pipeline = "daily" },
-    { __path__ = "/gameplan/automation/reconcile.log", job = "gameplan", pipeline = "reconcile" },
-    { __path__ = "/gameplan/automation/logs/shadow-cron.log", job = "gameplan", pipeline = "shadow" },
-  ]
-}
-loki.source.file "gameplan" {
-  targets       = local.file_match.gameplan.targets
-  tail_from_end = true
-  forward_to    = [loki.write.default.receiver]
-}
