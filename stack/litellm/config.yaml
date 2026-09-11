@@ -52,6 +52,19 @@ model_list:
     litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: embedding }
 
+  # Vision. oMLX serves these and they were the one family missing from the list
+  # above, so a client that pointed at the engine directly lost them the moment
+  # the public gateway was flipped to this router. captcha-api reads images with
+  # a panel of them and needs at least two to produce a confidence score at all.
+  - model_name: qwen2.5-vl-7b
+    litellm_params: { model: openai/qwen2.5-vl-7b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: qwen3-vl-2b
+    litellm_params: { model: openai/qwen3-vl-2b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: qwen3-vl-4b
+    litellm_params: { model: openai/qwen3-vl-4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: qwen3-vl-8b
+    litellm_params: { model: openai/qwen3-vl-8b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+
   # Speech. mode lets `/health` check them correctly instead of sending a chat probe.
   - model_name: local/tts
     litellm_params: { model: openai/kokoro-tts, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
