@@ -1,0 +1,174 @@
+"""Voice demo: speak, get transcribed, get answered, hear the answer — all on one Mac.
+
+The page is public; the inference is not. The browser talks only to this app, and this app holds the
+key for the private endpoint. No audio and no transcript is written to disk, and nothing here can reach
+the document corpus — this demo exists to show the speech path, not the retrieval one.
+
+    uvicorn app:app --host 0.0.0.0 --port 8080
+
+Environment:
+    INFER_BASE_URL   OpenAI-compatible endpoint (required), e.g. https://example.com/v1
+    INFER_API_KEY    key for it (required)
+    STT_MODEL        default parakeet-tdt-0.6b-v2
+    CHAT_MODEL       default gemma4-e4b-mlx
+    TTS_MODEL        default kokoro-tts
+    DAILY_BUDGET     total requests served per UTC day before the demo closes (default 2000)
+    DEMO_ENABLED     set to 0 to take it down without redeploying
+"""
+from __future__ import annotations
+
+import os
+import time
+from collections import defaultdict, deque
+from pathlib import Path
+
+import httpx
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response
+
+BASE = os.environ.get("INFER_BASE_URL", "").rstrip("/")
+KEY = os.environ.get("INFER_API_KEY", "")
+STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4-e4b-mlx")
+TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")
+DAILY_BUDGET = int(os.environ.get("DAILY_BUDGET", "2000"))
+ENABLED = os.environ.get("DEMO_ENABLED", "1") != "0"
+
+MAX_AUDIO_BYTES = 4 * 1024 * 1024   # ~2 minutes of 16 kHz mono WAV
+MAX_TEXT = 400
+PER_IP = (20, 300)                   # 20 requests per 5 minutes per address
+
+_hits: dict[str, deque] = defaultdict(deque)
+_day = ["", 0]
+
+app = FastAPI(title="voice demo", docs_url=None, redoc_url=None)
+STATIC = Path(__file__).parent / "static"
+
+
+def guard(request: Request) -> None:
+    """Cheap protection for a public page pointed at someone's GPU."""
+    if not ENABLED:
+        raise HTTPException(503, "The demo is switched off right now.")
+    if not BASE or not KEY:
+        raise HTTPException(500, "The demo is not configured with an inference endpoint.")
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    if _day[0] != today:
+        _day[0], _day[1] = today, 0
+    if _day[1] >= DAILY_BUDGET:
+        raise HTTPException(429, "The demo has used its budget for today. It resets at midnight UTC.")
+    _day[1] += 1
+
+    ip = (request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
+          or (request.client.host if request.client else "?")).strip()
+    now, (limit, window) = time.time(), PER_IP
+    q = _hits[ip]
+    while q and now - q[0] > window:
+        q.popleft()
+    if len(q) >= limit:
+        raise HTTPException(429, "That is a lot of requests. Give it a minute.")
+    q.append(now)
+
+
+async def upstream(method: str, path: str, **kw) -> httpx.Response:
+    headers = {"Authorization": f"Bearer {KEY}", "User-Agent": "voice-demo/1.0"}
+    async with httpx.AsyncClient(timeout=120) as c:
+        r = await c.request(method, f"{BASE}{path}", headers=headers, **kw)
+    if r.status_code >= 400:
+        raise HTTPException(502, f"The inference endpoint returned {r.status_code}.")
+    return r
+
+
+@app.on_event("startup")
+async def warm_forever() -> None:
+    """Keep the three models resident.
+
+    oMLX pools models and evicts the least recently used, so the first visitor after a quiet spell pays
+    the load: measured 3.65 s to synthesise a five-second clip cold against 1.19 s warm, and 4.09 s to
+    transcribe it against 0.49 s. A demo that is slow exactly when someone new arrives is not a demo.
+    One cheap round trip every few minutes keeps all three hot; the TTS warm-up produces the audio that
+    warms transcription, so it costs one synthesis rather than a stored fixture.
+    """
+    import asyncio
+
+    async def loop() -> None:
+        while True:
+            try:
+                if BASE and KEY and ENABLED:
+                    r = await upstream("POST", "/audio/speech",
+                                       json={"model": TTS_MODEL, "input": "ready", "voice": "af_heart",
+                                             "response_format": "wav"})
+                    await upstream("POST", "/audio/transcriptions",
+                                   files={"file": ("warm.wav", r.content, "audio/wav")},
+                                   data={"model": STT_MODEL})
+                    await upstream("POST", "/chat/completions",
+                                   json={"model": CHAT_MODEL, "max_tokens": 1,
+                                         "messages": [{"role": "user", "content": "hi"}]})
+            except Exception:
+                pass  # the demo degrades to a cold start, which is not worth crashing over
+            await asyncio.sleep(240)
+
+    asyncio.create_task(loop())
+
+
+@app.get("/")
+def index() -> FileResponse:
+    return FileResponse(STATIC / "index.html")
+
+
+@app.get("/api/health")
+def health() -> JSONResponse:
+    return JSONResponse({"ok": True, "enabled": ENABLED, "configured": bool(BASE and KEY),
+                         "served_today": _day[1], "budget": DAILY_BUDGET,
+                         "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
+
+
+@app.post("/api/transcribe")
+async def transcribe(request: Request, audio: UploadFile, seconds: float = Form(0.0)) -> JSONResponse:
+    guard(request)
+    blob = await audio.read()
+    if len(blob) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, "That clip is too long for the demo. Keep it under about two minutes.")
+    t0 = time.time()
+    r = await upstream("POST", "/audio/transcriptions",
+                       files={"file": ("clip.wav", blob, "audio/wav")},
+                       data={"model": STT_MODEL})
+    took = time.time() - t0
+    text = (r.json().get("text") or "").strip()
+    return JSONResponse({"text": text, "seconds": round(took, 2), "audio_seconds": round(seconds, 2),
+                         "realtime": round(seconds / took, 1) if took > 0 and seconds else None,
+                         "model": STT_MODEL})
+
+
+@app.post("/api/reply")
+async def reply(request: Request, payload: dict) -> JSONResponse:
+    guard(request)
+    text = (payload.get("text") or "").strip()[:MAX_TEXT]
+    if not text:
+        raise HTTPException(400, "Nothing to answer.")
+    t0 = time.time()
+    r = await upstream("POST", "/chat/completions", json={
+        "model": CHAT_MODEL, "max_tokens": 120, "temperature": 0.4,
+        "messages": [
+            {"role": "system", "content": "You are a voice assistant running on a Mac in someone's office. "
+                                          "Answer in at most three sentences, plainly, no lists, no markdown. "
+                                          "If asked what you are, say you are an open-weight model running locally."},
+            {"role": "user", "content": text}]})
+    took = time.time() - t0
+    msg = r.json()["choices"][0]["message"].get("content") or ""
+    return JSONResponse({"text": msg.strip(), "seconds": round(took, 2), "model": CHAT_MODEL})
+
+
+@app.post("/api/speak")
+async def speak(request: Request, payload: dict) -> Response:
+    guard(request)
+    text = (payload.get("text") or "").strip()[:MAX_TEXT]
+    if not text:
+        raise HTTPException(400, "Nothing to say.")
+    voice = payload.get("voice") or "af_heart"
+    if not voice.replace("_", "").isalnum():
+        raise HTTPException(400, "Unknown voice.")
+    t0 = time.time()
+    r = await upstream("POST", "/audio/speech", json={"model": TTS_MODEL, "input": text,
+                                                      "voice": voice, "response_format": "wav"})
+    return Response(r.content, media_type="audio/wav",
+                    headers={"X-Synthesis-Seconds": str(round(time.time() - t0, 2))})
