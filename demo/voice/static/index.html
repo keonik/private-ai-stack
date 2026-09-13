@@ -38,6 +38,7 @@
   .dot.listen{background:var(--you)} .dot.hear{background:var(--live)}
   .dot.work{background:var(--accent)} .dot.speak{background:var(--accent)}
   .viz{width:100%;max-width:320px;height:56px;display:block}
+  .picks{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center}
   .voice{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);flex-wrap:wrap;justify-content:center}
   .voice select{font-family:var(--mono);font-size:13px;padding:7px 10px;border:1px solid var(--rule);
     border-radius:4px;background:var(--card);color:var(--ink);max-width:15rem}
@@ -71,9 +72,14 @@
       <button id="talk" class="talk">Start conversation</button>
       <div class="state"><span class="dot" id="dot"></span><span id="stateText">Not listening</span></div>
       <canvas id="viz" class="viz" width="640" height="112" aria-hidden="true"></canvas>
-      <label class="voice"><span>Reply voice</span>
-        <select id="voice" aria-label="Reply voice"><option value="af_heart">Heart · American English</option></select>
-      </label>
+      <div class="picks">
+        <label class="voice"><span>Answers from</span>
+          <select id="model" aria-label="Chat model"><option value="gemma4-e4b-mlx">Gemma 4 E4B</option></select>
+        </label>
+        <label class="voice"><span>Reply voice</span>
+          <select id="voice" aria-label="Reply voice"><option value="af_heart">Heart · American English</option></select>
+        </label>
+      </div>
       <p class="hint" id="hint">Your browser will ask for the microphone. It only sends a clip once you stop speaking.</p>
       <p class="err" id="err" hidden></p>
     </div>
@@ -203,7 +209,8 @@ async function handleTurn(blocks, frames, inRate){
     history.push({ role: "user", content: heard.text });
 
     setState("work", "Thinking");
-    const said = await post("/api/reply", { json: { text: heard.text, history: history.slice(0, -1) } });
+    const said = await post("/api/reply", { json: { text: heard.text, history: history.slice(0, -1),
+                                                    model: $("model").value } });
     const row = addTurn("Mac", said.text, `${said.seconds}s`);
     history.push({ role: "assistant", content: said.text });
 
@@ -334,27 +341,43 @@ function stop(){
 talk.addEventListener("click", () => running ? stop() : start());
 window.addEventListener("pagehide", stop);
 
-fetch("/api/voices").then(r => r.json()).then(d => {
-  const sel = $("voice"), saved = (() => { try { return localStorage.getItem("voice"); } catch { return null; } })();
-  const groups = {};
-  d.voices.forEach(v => (groups[v.language] ||= []).push(v));
+function fillSelect(sel, items, saved, fallback, render){
   sel.innerHTML = "";
-  Object.keys(groups).forEach(lang => {
-    const g = document.createElement("optgroup");
-    g.label = lang;
-    groups[lang].forEach(v => {
+  render(sel, items);
+  sel.value = (saved && items.some(i => i.id === saved)) ? saved : fallback;
+  sel.addEventListener("change", () => { try { localStorage.setItem(sel.id, sel.value); } catch {} });
+}
+const remembered = k => { try { return localStorage.getItem(k); } catch { return null; } };
+
+fetch("/api/models").then(r => r.json()).then(d => {
+  fillSelect($("model"), d.models, remembered("model"), d.default, (sel, items) => {
+    items.forEach(m => {
       const o = document.createElement("option");
-      o.value = v.id; o.textContent = `${v.label} · ${v.gender}`;
-      g.appendChild(o);
+      o.value = m.id; o.textContent = `${m.label} · ${m.note}`;
+      sel.appendChild(o);
     });
-    sel.appendChild(g);
   });
-  sel.value = (saved && d.voices.some(v => v.id === saved)) ? saved : d.default;
-  sel.addEventListener("change", () => { try { localStorage.setItem("voice", sel.value); } catch {} });
+}).catch(() => {});
+
+fetch("/api/voices").then(r => r.json()).then(d => {
+  fillSelect($("voice"), d.voices, remembered("voice"), d.default, (sel, items) => {
+    const groups = {};
+    items.forEach(v => (groups[v.language] ||= []).push(v));
+    Object.keys(groups).forEach(lang => {
+      const g = document.createElement("optgroup");
+      g.label = lang;
+      groups[lang].forEach(v => {
+        const o = document.createElement("option");
+        o.value = v.id; o.textContent = `${v.label} · ${v.gender}`;
+        g.appendChild(o);
+      });
+      sel.appendChild(g);
+    });
+  });
 }).catch(() => {});
 
 fetch("/api/health").then(r => r.json()).then(d => {
-  $("foot").innerHTML = `<span>${d.models.stt} · transcription</span><span>${d.models.chat} · answer</span>` +
+  $("foot").innerHTML = `<span>${d.models.stt} · transcription</span>` +
                         `<span>${d.models.tts} · speech</span><span>nothing stored</span>`;
 }).catch(() => {});
 </script>

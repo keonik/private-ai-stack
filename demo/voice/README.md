@@ -52,6 +52,25 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 | `DAILY_BUDGET` | `2000` | requests per UTC day before the demo closes itself |
 | `DEMO_ENABLED` | `1` | set to `0` to take it down without redeploying |
 
+## Models, and why each needs a different flag
+
+The picker offers four chat models. Two of them will read their own scratchpad aloud unless told not
+to, which is the single biggest cause of a reply that sounds strange:
+
+| model | reply time | flag it needs | without the flag |
+|---|---|---|---|
+| Gemma 4 E4B | ~1 s | none | — |
+| Qwen3 VL 8B | ~1.5 s | none | — |
+| GPT-OSS 20B | ~2.5 s | `reasoning_effort: low` | thinking consumes the whole token budget; content comes back empty |
+| Qwen3.8 27B | ~3-4 s | `chat_template_kwargs: {"enable_thinking": false}` | 10 s, and it says *"We need answer user's question:"* out loud |
+
+Two related fixes live in the same place. The token budget is **220**, not 120 — three spoken
+sentences overrun 120 often enough that answers were being cut mid-word, which reads as the model
+being odd when it is really being truncated. And `reasoning_content` is never spoken: if a model
+returns thinking but no content, the request fails cleanly instead of narrating deliberation.
+
+`qwen3.8-27b-mtplx` is registered on the engine but 404s when called, so it is deliberately not offered.
+
 ## Voices
 
 Kokoro ships 54 voice files. **41 synthesise on this engine; all 13 Japanese and Chinese ones return

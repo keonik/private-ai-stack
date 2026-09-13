@@ -30,6 +30,24 @@ BASE = os.environ.get("INFER_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("INFER_API_KEY", "")
 STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4-e4b-mlx")
+
+# Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
+# reasoning aloud. Measured on the reference machine with a three-sentence answer:
+#
+#   gemma4-e4b        0.6-1.5 s   nothing needed
+#   qwen3-vl-8b       1.5 s       nothing needed
+#   gpt-oss-20b       2.5 s       reasoning_effort=low; without it, thinking eats the whole budget
+#   Qwen3.8-27B       3.7 s       enable_thinking=false; with thinking on it took 10 s and answered
+#                                 "We need answer user's question:" out loud
+CHAT_CHOICES = [
+    {"id": "gemma4-e4b-mlx",    "label": "Gemma 4 E4B",    "note": "fastest, ~1 s",     "extra": {}},
+    {"id": "qwen3-vl-8b",       "label": "Qwen3 VL 8B",    "note": "~1.5 s",            "extra": {}},
+    {"id": "gpt-oss-20b-mlx",   "label": "GPT-OSS 20B",    "note": "~2.5 s, reasons",
+     "extra": {"reasoning_effort": "low"}},
+    {"id": "Qwen3.8-27B-4bit",  "label": "Qwen3.8 27B",    "note": "~4 s, best answers",
+     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
+]
+CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}
 TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")
 DAILY_BUDGET = int(os.environ.get("DAILY_BUDGET", "2000"))
 ENABLED = os.environ.get("DEMO_ENABLED", "1") != "0"
@@ -150,6 +168,13 @@ def health() -> JSONResponse:
                          "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
 
 
+@app.get("/api/models")
+def models() -> JSONResponse:
+    default = CHAT_MODEL if CHAT_MODEL in CHAT_BY_ID else CHAT_CHOICES[0]["id"]
+    return JSONResponse({"default": default,
+                         "models": [{k: c[k] for k in ("id", "label", "note")} for c in CHAT_CHOICES]})
+
+
 @app.get("/api/voices")
 def voices() -> JSONResponse:
     return JSONResponse({"default": DEFAULT_VOICE, "voices": voice_catalogue()})
@@ -186,9 +211,10 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
         content = str(turn.get("content") or "").strip()[:MAX_TEXT]
         if content:
             history.append({"role": role, "content": content})
+    choice = CHAT_BY_ID.get(payload.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
     t0 = time.time()
     r = await upstream("POST", "/chat/completions", json={
-        "model": CHAT_MODEL, "max_tokens": 120, "temperature": 0.4,
+        "model": choice["id"], "max_tokens": 220, "temperature": 0.4, **choice["extra"],
         "messages": [
             {"role": "system", "content": "You are a voice assistant running on a Mac in someone's office. "
                                           "You are being spoken to out loud and your reply will be read aloud, "
@@ -198,8 +224,12 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
             *history,
             {"role": "user", "content": text}]})
     took = time.time() - t0
-    msg = r.json()["choices"][0]["message"].get("content") or ""
-    return JSONResponse({"text": msg.strip(), "seconds": round(took, 2), "model": CHAT_MODEL})
+    # Never read reasoning_content aloud: on a thinking model that is the scratchpad, and when the
+    # budget runs out mid-thought it is all there is. Better to say nothing than to narrate deliberation.
+    msg = (r.json()["choices"][0]["message"].get("content") or "").strip()
+    if not msg:
+        raise HTTPException(502, "That model spent its budget thinking and said nothing. Try another one.")
+    return JSONResponse({"text": msg, "seconds": round(took, 2), "model": choice["id"]})
 
 
 @app.post("/api/speak")
