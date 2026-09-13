@@ -29,24 +29,32 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 BASE = os.environ.get("INFER_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("INFER_API_KEY", "")
 STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4-e4b-mlx")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.5-9b")
 
 # Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
-# reasoning aloud. Measured on the reference machine with a three-sentence answer:
+# reasoning aloud. Median of four voice-shaped questions, measured on the reference machine 2026-09-13:
 #
-#   qwen3-vl-4b       0.3-0.6 s   nothing needed  (best answers per second measured here)
-#   gemma4-e4b        0.6-1.5 s   nothing needed
-#   qwen3-vl-8b       1.5 s       nothing needed
-#   gpt-oss-20b       2.5 s       reasoning_effort=low; without it, thinking eats the whole budget
-#   Qwen3.8-27B       3.7 s       enable_thinking=false; with thinking on it took 10 s and answered
-#                                 "We need answer user's question:" out loud
+#   qwen3-vl-4b    0.51 s   nothing needed
+#   qwen3.5-4b     0.59 s   enable_thinking=false
+#   gemma4-e4b     0.61 s   nothing needed          terse; the original "odd helpfulness" complaint
+#   qwen3.5-9b     0.87 s   enable_thinking=false   best answers per second measured
+#   gpt-oss-20b    2.5 s    reasoning_effort=low    else thinking eats the budget and content is empty
+#   Qwen3.8-27B    3.0 s    enable_thinking=false   else 10 s and it says "We need answer user's question:"
+#
+# Every Qwen generation here ships thinking ON by default and writes it into `content`, not
+# `reasoning_content` — so without the flag the assistant literally reads "Thinking Process: 1. Analyze
+# the Request" aloud. Phi-4-mini was measured too (0.55 s) and left out: it was the only model that got
+# a plain recall question wrong, answering what it was rather than what it had just been told.
 CHAT_CHOICES = [
-    {"id": "qwen3-vl-4b",       "label": "Qwen3 VL 4B",    "note": "fastest, ~0.5 s",   "extra": {}},
-    {"id": "gemma4-e4b-mlx",    "label": "Gemma 4 E4B",    "note": "~1 s, terse",       "extra": {}},
-    {"id": "qwen3-vl-8b",       "label": "Qwen3 VL 8B",    "note": "~1.5 s",            "extra": {}},
-    {"id": "gpt-oss-20b-mlx",   "label": "GPT-OSS 20B",    "note": "~2.5 s, reasons",
+    {"id": "qwen3.5-9b",       "label": "Qwen3.5 9B",     "note": "best answers, ~0.9 s",
+     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
+    {"id": "qwen3-vl-4b",      "label": "Qwen3 VL 4B",    "note": "fastest, ~0.5 s",   "extra": {}},
+    {"id": "qwen3.5-4b",       "label": "Qwen3.5 4B",     "note": "~0.6 s",
+     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
+    {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",    "note": "~0.6 s, terse",     "extra": {}},
+    {"id": "gpt-oss-20b-mlx",  "label": "GPT-OSS 20B",    "note": "~2.5 s, reasons",
      "extra": {"reasoning_effort": "low"}},
-    {"id": "Qwen3.8-27B-4bit",  "label": "Qwen3.8 27B",    "note": "~4 s, best answers",
+    {"id": "Qwen3.8-27B-4bit", "label": "Qwen3.8 27B",    "note": "~3 s, heavyweight",
      "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
 ]
 CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}

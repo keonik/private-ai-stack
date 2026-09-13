@@ -54,22 +54,29 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 
 ## Models, and why each needs a different flag
 
-The picker offers four chat models. Two of them will read their own scratchpad aloud unless told not
-to, which is the single biggest cause of a reply that sounds strange:
+Six models in the picker, ranked by how good the answer is per second of waiting. Median of four
+voice-shaped questions — a capability question, one that should be refused, one testing recall of the
+previous turn, and one asking for a plain explanation — measured 2026-09-13:
 
-| model | reply time | flag it needs | without the flag |
+| model | median | flag it needs | without the flag |
 |---|---|---|---|
-| Gemma 4 E4B | ~1 s | none | — |
-| Qwen3 VL 8B | ~1.5 s | none | — |
-| GPT-OSS 20B | ~2.5 s | `reasoning_effort: low` | thinking consumes the whole token budget; content comes back empty |
-| Qwen3.8 27B | ~3-4 s | `chat_template_kwargs: {"enable_thinking": false}` | 10 s, and it says *"We need answer user's question:"* out loud |
+| **Qwen3.5 9B** (default) | **0.87 s** | `enable_thinking: false` | reads *"Thinking Process: 1. Analyze the Request"* aloud |
+| Qwen3 VL 4B | 0.51 s | none | — |
+| Qwen3.5 4B | 0.59 s | `enable_thinking: false` | same leak as the 9B |
+| Gemma 4 E4B | 0.61 s | none | — |
+| GPT-OSS 20B | ~2.5 s | `reasoning_effort: low` | thinking eats the budget; content comes back empty |
+| Qwen3.8 27B | ~3 s | `enable_thinking: false` | 10 s, and it says *"We need answer user's question:"* |
 
-Two related fixes live in the same place. The token budget is **220**, not 120 — three spoken
-sentences overrun 120 often enough that answers were being cut mid-word, which reads as the model
-being odd when it is really being truncated. And `reasoning_content` is never spoken: if a model
-returns thinking but no content, the request fails cleanly instead of narrating deliberation.
+**Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`.** That
+one fact explains most of what looks like a model being strange out loud. Two other fixes live here:
+the budget is **220 tokens**, not 120, because three spoken sentences were being cut mid-word; and
+`reasoning_content` is never spoken — if a model thinks but returns no content, the request fails
+cleanly rather than narrating deliberation.
 
-`qwen3.8-27b-mtplx` is registered on the engine but 404s when called, so it is deliberately not offered.
+**Measured and rejected.** Phi-4-mini is quick (0.55 s) and was the only model to get a plain recall
+question wrong, answering what it was rather than what it had just been told. `qwen3.8-27b-mtplx` is
+gone from the engine and 404s. The vision models earn their place on text alone: `qwen3-vl-4b` was the
+quickest good answer of anything tested, and the vision tower simply sits idle on a text request.
 
 ## Voices
 
