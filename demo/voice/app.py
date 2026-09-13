@@ -34,13 +34,15 @@ CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4-e4b-mlx")
 # Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
 # reasoning aloud. Measured on the reference machine with a three-sentence answer:
 #
+#   qwen3-vl-4b       0.3-0.6 s   nothing needed  (best answers per second measured here)
 #   gemma4-e4b        0.6-1.5 s   nothing needed
 #   qwen3-vl-8b       1.5 s       nothing needed
 #   gpt-oss-20b       2.5 s       reasoning_effort=low; without it, thinking eats the whole budget
 #   Qwen3.8-27B       3.7 s       enable_thinking=false; with thinking on it took 10 s and answered
 #                                 "We need answer user's question:" out loud
 CHAT_CHOICES = [
-    {"id": "gemma4-e4b-mlx",    "label": "Gemma 4 E4B",    "note": "fastest, ~1 s",     "extra": {}},
+    {"id": "qwen3-vl-4b",       "label": "Qwen3 VL 4B",    "note": "fastest, ~0.5 s",   "extra": {}},
+    {"id": "gemma4-e4b-mlx",    "label": "Gemma 4 E4B",    "note": "~1 s, terse",       "extra": {}},
     {"id": "qwen3-vl-8b",       "label": "Qwen3 VL 8B",    "note": "~1.5 s",            "extra": {}},
     {"id": "gpt-oss-20b-mlx",   "label": "GPT-OSS 20B",    "note": "~2.5 s, reasons",
      "extra": {"reasoning_effort": "low"}},
