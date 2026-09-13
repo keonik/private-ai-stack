@@ -21,6 +21,14 @@ The browser sends 16 kHz mono WAV it encodes itself, so the server never has to 
 format. That removes the whole class of "every .webm upload 500s" failures, and 16 kHz is what every
 backend resamples to anyway.
 
+**Who has the floor** is shown as a rolling amplitude bar chart on a canvas: green while you speak,
+teal while the Mac answers, flat grey when neither. Both sides feed the same history — your side from
+the same RMS the voice detection already computes, the reply side from an `AnalyserNode` on the audio
+element. No charting library; it is about sixty lines and it needs to read two sources a library would
+not know about. One caveat worth knowing if you touch it: `createMediaElementSource` can be called only
+once per element and reroutes that element's audio through the graph, so the AudioContext is created
+once for the life of the page and deliberately not closed on stop.
+
 **Conversation memory** is the last six turns, sent with each request. The server coerces every role to
 user or assistant and truncates each turn, because the client is untrusted and an unbounded history is
 a way to make someone else's GPU do free work.
