@@ -40,12 +40,22 @@ format. That removes the whole class of "every .webm upload 500s" failures, and 
 backend resamples to anyway.
 
 **Who has the floor** is shown as a rolling amplitude bar chart on a canvas: green while you speak,
-teal while the Mac answers, flat grey when neither. Both sides feed the same history — your side from
-the same RMS the voice detection already computes, the reply side from an `AnalyserNode` on the audio
-element. No charting library; it is about sixty lines and it needs to read two sources a library would
-not know about. One caveat worth knowing if you touch it: `createMediaElementSource` can be called only
-once per element and reroutes that element's audio through the graph, so the AudioContext is created
-once for the life of the page and deliberately not closed on stop.
+teal while the Mac answers, flat grey when neither. Your side comes from the RMS the voice detection
+already computes. The reply's side is **computed from the WAV bytes**, not from the audio graph.
+
+That last choice is load-bearing on phones. The first version routed the reply through a
+`MediaElementSource` so an `AnalyserNode` could watch it, and on mobile that made the reply **silent
+while transcription kept working** — because on iOS the WebAudio path obeys the hardware silent switch
+and outputs nothing from a suspended or interrupted context, while a plain media element does neither.
+Playback is now ordinary `<audio>`, the envelope is parsed from the PCM, and the bars are indexed by
+`currentTime`. Same picture, no audio graph.
+
+Two more mobile rules are handled: the element is marked `playsinline`, and a fraction of a second of
+silence is played inside the tap that starts the conversation, which is what marks the element as
+user-permitted so later replies can play themselves. If a browser still refuses, the page says so
+instead of appearing to work.
+
+`env_test.js` checks the parser against a real reply from the engine.
 
 **Conversation memory** is the last six turns, sent with each request. The server coerces every role to
 user or assistant and truncates each turn, because the client is untrusted and an unbounded history is

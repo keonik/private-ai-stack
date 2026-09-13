@@ -123,7 +123,7 @@ let sens = SENSITIVITY.normal;
 const FLOOR_WIN = 40;   // ~1.8 s of history behind the noise-floor estimate
 
 let ctx, stream, node, running = false, busy = false;
-let playerSrc, playAnalyser, playData;
+let audioUnlocked = false;
 let noiseFloor = 0.003, startT = 0.02, keepT = 0.01, floorHist = [];
 let speaking = false, speechMs = 0, silenceMs = 0;
 let preroll = [], prerollFrames = 0, utterance = [], utteranceFrames = 0;
@@ -247,23 +247,30 @@ async function handleTurn(blocks, frames, inRate){
     const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
                                           body: JSON.stringify({ text: said.text, voice: $("voice").value }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Speech synthesis failed.");
+    const bytes = await r.arrayBuffer();
+    const shape = envelopeOf(bytes);
     const player = $("player");
-    player.src = URL.createObjectURL(await r.blob());
+    player.src = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
     row.children[2].textContent += ` · ${r.headers.get("X-Synthesis-Seconds") || "?"}s to speak`;
-    attachPlaybackAnalyser(player);
+
     let watching = true;
     const watch = () => {
       if (!watching) return;
-      if (playAnalyser){
-        playAnalyser.getByteTimeDomainData(playData);
-        let sum = 0;
-        for (let i = 0; i < playData.length; i++){ const d = (playData[i] - 128) / 128; sum += d * d; }
-        pushLevel(Math.sqrt(sum / playData.length) * 3.2, "mac");
+      if (shape){
+        const i = Math.floor(player.currentTime / 0.046);
+        pushLevel((shape.env[i] || 0) * 3.2, "mac");
       }
       requestAnimationFrame(watch);
     };
     watch();
-    await new Promise(done => { player.onended = player.onerror = done; player.play().catch(done); });
+    await new Promise(done => {
+      player.onended = done;
+      player.onerror = () => { fail("The reply could not be played on this device."); done(); };
+      player.play().catch(() => {
+        fail("This browser blocked the reply from playing. Tap Start again to allow audio.");
+        done();
+      });
+    });
     watching = false;
   } catch (e) {
     fail(e.message || String(e));
@@ -325,24 +332,54 @@ function onAudio(e){
   }
 }
 
-// createMediaElementSource can only be called once per element, and it reroutes the element's audio
-// through the graph — so once attached it must stay connected to the destination or playback is silent.
-function attachPlaybackAnalyser(player){
-  if (!ctx || ctx.state === "closed") return;
-  if (ctx.state === "suspended") ctx.resume().catch(() => {});
-  if (playerSrc) return;
+// The reply is played by the plain <audio> element and never routed through WebAudio.
+//
+// It used to go through a MediaElementSource so an AnalyserNode could drive the visualiser, and that is
+// exactly what made it silent on mobile: on iOS the WebAudio path obeys the hardware silent switch,
+// while the media element does not, and a context that is suspended or interrupted outputs nothing at
+// all. So the envelope is computed from the WAV bytes instead — same picture, no audio graph.
+function envelopeOf(buf){
+  const dv = new DataView(buf);
+  if (dv.getUint32(0, false) !== 0x52494646) return null;          // "RIFF"
+  let off = 12, rate = 24000, channels = 1, bits = 16, dataAt = -1, dataLen = 0;
+  while (off + 8 <= dv.byteLength){
+    const id = String.fromCharCode(dv.getUint8(off), dv.getUint8(off+1), dv.getUint8(off+2), dv.getUint8(off+3));
+    const size = dv.getUint32(off + 4, true);
+    if (id === "fmt "){ channels = dv.getUint16(off+10, true); rate = dv.getUint32(off+12, true); bits = dv.getUint16(off+22, true); }
+    else if (id === "data"){ dataAt = off + 8; dataLen = size; break; }
+    off += 8 + size + (size % 2);
+  }
+  if (dataAt < 0 || bits !== 16) return null;
+  const samples = new Int16Array(buf, dataAt, Math.floor(dataLen / 2));
+  const step = Math.max(1, Math.round(rate * 0.046) * channels);   // one point per visualiser block
+  const env = [];
+  for (let i = 0; i < samples.length; i += step){
+    let sum = 0, n = 0;
+    for (let j = i; j < i + step && j < samples.length; j += channels){ const v = samples[j] / 32768; sum += v * v; n++; }
+    env.push(n ? Math.sqrt(sum / n) : 0);
+  }
+  return { env, seconds: samples.length / channels / rate };
+}
+
+// iOS will not play audio that a user gesture did not start. Playing a moment of silence inside the
+// tap that starts the conversation marks the element as allowed, so every later reply can play itself.
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
+async function unlockAudio(player){
+  if (audioUnlocked) return;
   try {
-    playerSrc = ctx.createMediaElementSource(player);
-    playAnalyser = ctx.createAnalyser();
-    playAnalyser.fftSize = 512;
-    playData = new Uint8Array(playAnalyser.fftSize);
-    playerSrc.connect(playAnalyser);
-    playAnalyser.connect(ctx.destination);
-  } catch { playerSrc = null; playAnalyser = null; }
+    player.src = SILENT_WAV;
+    await player.play();
+    player.pause(); player.currentTime = 0;
+    audioUnlocked = true;
+  } catch { /* a later play may still work; nothing is lost by trying */ }
 }
 
 async function start(){
   err.hidden = true;
+  const player = $("player");
+  player.playsInline = true;          // iOS refuses to play audio that wants to go fullscreen
+  player.setAttribute("playsinline", "");
+  await unlockAudio(player);
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -369,7 +406,7 @@ function stop(){
   // The context stays open on purpose: closing it would kill the element source feeding the visualiser,
   // and it can only be created once per audio element.
   for (let i = 0; i < BARS; i++) pushLevel(0, "idle");
-  const player = $("player"); player.pause();
+  $("player").pause();
   talk.classList.remove("on"); talk.textContent = "Start conversation";
   setState("", "Not listening");
   $("hint").textContent = "Your browser will ask for the microphone. It only sends a clip once you stop speaking.";
