@@ -76,6 +76,13 @@
         <label class="voice"><span>Answers from</span>
           <select id="model" aria-label="Chat model"><option value="gemma4-e4b-mlx">Gemma 4 E4B</option></select>
         </label>
+        <label class="voice"><span>Mic sensitivity</span>
+          <select id="sens" aria-label="Microphone sensitivity">
+            <option value="high">High · quiet room</option>
+            <option value="normal" selected>Normal</option>
+            <option value="low">Low · noisy room</option>
+          </select>
+        </label>
         <label class="voice"><span>Reply voice</span>
           <select id="voice" aria-label="Reply voice"><option value="af_heart">Heart · American English</option></select>
         </label>
@@ -97,20 +104,33 @@ const talk = $("talk"), err = $("err"), dot = $("dot"), stateText = $("stateText
 // Voice activity detection, tuned by ear on a normal room. Speech has to clear the measured noise
 // floor for a moment before it counts, and a pause has to last before the turn is considered over —
 // otherwise every breath either starts or ends a turn.
-const SILENCE_MS = 850;      // pause that ends your turn
-const MIN_SPEECH_MS = 350;   // shorter than this is a cough, not a sentence
+const SILENCE_MS = 700;      // pause that ends your turn
+const MIN_SPEECH_MS = 200;   // shorter than this is a cough, not a sentence
 const MAX_TURN_MS = 30000;   // hard stop, so a stuck gate cannot upload minutes of audio
-const PREROLL_MS = 300;      // kept before speech is detected, so the first word survives
+const PREROLL_MS = 400;      // kept before speech is detected, so the first word survives
 const OUT_RATE = 16000;
+const BLOCK = 2048;          // ~46 ms at 44.1 kHz: fine enough to catch a short word
+
+// Two thresholds, not one. Starting a turn should take a clear signal; continuing it should not, or
+// the gaps between words end the turn. Sensitivity scales both, because a quiet office and a room with
+// a fan need different answers and only the person in the room knows which.
+const SENSITIVITY = {
+  high:   { start: 1.9, keep: 1.35, abs: 0.0006 },
+  normal: { start: 2.6, keep: 1.70, abs: 0.0010 },
+  low:    { start: 4.0, keep: 2.40, abs: 0.0020 },
+};
+let sens = SENSITIVITY.normal;
+const FLOOR_WIN = 40;   // ~1.8 s of history behind the noise-floor estimate
 
 let ctx, stream, node, running = false, busy = false;
 let playerSrc, playAnalyser, playData;
-let floorSum = 0, floorN = 0, noiseFloor = 0.008;
+let noiseFloor = 0.003, startT = 0.02, keepT = 0.01, floorHist = [];
 let speaking = false, speechMs = 0, silenceMs = 0;
 let preroll = [], prerollFrames = 0, utterance = [], utteranceFrames = 0;
 const history = [];
 
 function setState(cls, text){ dot.className = "dot " + cls; stateText.textContent = text; }
+const remembered = k => { try { return localStorage.getItem(k); } catch { return null; } };
 
 // Amplitude over time, mirrored around the centre line. Green while you speak, teal while the Mac
 // answers, flat grey when neither — so a glance tells you who has the floor and whether the
@@ -140,6 +160,15 @@ function drawViz(){
   vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   vctx.clearRect(0, 0, w, h);
   const gap = 2, bw = Math.max(1.5, (w - gap * (BARS - 1)) / BARS), mid = h / 2, pal = palette();
+  // Where the gate opens, drawn to the same scale as the bars, so it is obvious when your voice is
+  // simply not clearing it.
+  if (running){
+    const t = Math.min(0.95, startT / (noiseFloor * 9 || 1)) * (h - 6);
+    vctx.fillStyle = pal.idle; vctx.globalAlpha = 0.9;
+    vctx.fillRect(0, mid - t / 2, w, 1);
+    vctx.fillRect(0, mid + t / 2, w, 1);
+    vctx.globalAlpha = 1;
+  }
   for (let i = 0; i < BARS; i++){
     const amp = wave[i], x = i * (bw + gap);
     const bh = Math.max(1.5, amp * (h - 6));
@@ -254,32 +283,40 @@ function onAudio(e){
   for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
   const rms = Math.sqrt(sum / buf.length);
 
-  if (floorN < 12){ floorSum += rms; floorN++; noiseFloor = Math.max(0.004, (floorSum / floorN) * 1.6); return; }
-  // Scale against the measured noise floor so a quiet room and a loud one both look alive.
+  // The noise floor is the 20th percentile of the last ~1.8 s: what the room sounds like when nobody
+  // is talking. A running average was tried first and is wrong here — it converges too slowly to be
+  // right in the first second, and speech drags it upward, which raises the bar exactly when someone
+  // is trying to clear it. A percentile ignores the loud tail entirely.
+  floorHist.push(rms);
+  if (floorHist.length > FLOOR_WIN) floorHist.shift();
+  const sorted = [...floorHist].sort((a, b) => a - b);
+  noiseFloor = Math.max(0.0008, sorted[Math.floor(sorted.length * 0.2)] || 0.003);
+  startT = noiseFloor * sens.start + sens.abs;
+  keepT = noiseFloor * sens.keep + sens.abs * 0.5;
   if (!busy) pushLevel(rms / (noiseFloor * 9), speaking ? "you" : "idle");
   if (busy || !running) return;
 
-  const loud = rms > noiseFloor * 2.2;
   const copy = new Float32Array(buf);
 
   if (!speaking){
     preroll.push(copy); prerollFrames += copy.length;
     const maxFrames = (PREROLL_MS / 1000) * ctx.sampleRate;
     while (prerollFrames > maxFrames){ prerollFrames -= preroll.shift().length; }
-    if (loud){
-      speechMs += ms;
-      if (speechMs >= MIN_SPEECH_MS){
-        speaking = true; silenceMs = 0;
-        utterance = preroll.slice(); utteranceFrames = prerollFrames;
-        preroll = []; prerollFrames = 0;
-        setState("hear", "Hearing you");
-      }
-    } else speechMs = 0;
+    // Decay rather than reset: speech is not continuous, and resetting on the first quiet block meant
+    // only a long uninterrupted shout could ever open the gate.
+    if (rms > startT) speechMs += ms;
+    else speechMs = Math.max(0, speechMs - ms * 0.6);
+    if (speechMs >= MIN_SPEECH_MS){
+      speaking = true; silenceMs = 0;
+      utterance = preroll.slice(); utteranceFrames = prerollFrames;
+      preroll = []; prerollFrames = 0;
+      setState("hear", "Hearing you");
+    }
     return;
   }
 
   utterance.push(copy); utteranceFrames += copy.length;
-  silenceMs = loud ? 0 : silenceMs + ms;
+  silenceMs = rms > keepT ? 0 : silenceMs + ms;
   const turnMs = (utteranceFrames / ctx.sampleRate) * 1000;
   if (silenceMs >= SILENCE_MS || turnMs >= MAX_TURN_MS){
     const blocks = utterance, frames = utteranceFrames, rate = ctx.sampleRate;
@@ -313,13 +350,13 @@ async function start(){
   if (!ctx || ctx.state === "closed") ctx = new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state === "suspended") await ctx.resume().catch(() => {});
   const src = ctx.createMediaStreamSource(stream);
-  node = ctx.createScriptProcessor(4096, 1, 1);
+  node = ctx.createScriptProcessor(BLOCK, 1, 1);
   node.onaudioprocess = onAudio;
   src.connect(node);
   // Route to a muted gain node: some browsers will not run the processor unless it reaches the graph's end.
   const mute = ctx.createGain(); mute.gain.value = 0;
   node.connect(mute); mute.connect(ctx.destination);
-  running = true; floorSum = 0; floorN = 0;
+  running = true; noiseFloor = 0.003; floorHist = []; speechMs = 0;
   talk.classList.add("on"); talk.textContent = "Stop";
   setState("listen", "Listening");
   $("hint").textContent = "Speak whenever you like. It sends a clip only after you pause.";
@@ -338,6 +375,15 @@ function stop(){
   $("hint").textContent = "Your browser will ask for the microphone. It only sends a clip once you stop speaking.";
 }
 
+const sensSel = $("sens");
+const savedSens = remembered("sens");
+if (savedSens && SENSITIVITY[savedSens]) sensSel.value = savedSens;
+sens = SENSITIVITY[sensSel.value];
+sensSel.addEventListener("change", () => {
+  sens = SENSITIVITY[sensSel.value] || SENSITIVITY.normal;
+  try { localStorage.setItem("sens", sensSel.value); } catch {}
+});
+
 talk.addEventListener("click", () => running ? stop() : start());
 window.addEventListener("pagehide", stop);
 
@@ -347,7 +393,7 @@ function fillSelect(sel, items, saved, fallback, render){
   sel.value = (saved && items.some(i => i.id === saved)) ? saved : fallback;
   sel.addEventListener("change", () => { try { localStorage.setItem(sel.id, sel.value); } catch {} });
 }
-const remembered = k => { try { return localStorage.getItem(k); } catch { return null; } };
+
 
 fetch("/api/models").then(r => r.json()).then(d => {
   fillSelect($("model"), d.models, remembered("model"), d.default, (sel, items) => {

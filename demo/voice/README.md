@@ -11,11 +11,29 @@ browser ──► this app (VPS) ──► private endpoint (a Mac) ──► tr
 You press start once and talk. The page listens continuously, notices when you stop, sends that turn,
 speaks the answer and listens again — no push-to-talk.
 
-**How the turn ends.** Voice activity detection runs in the browser on raw PCM: it measures the room's
-noise floor for the first half second, treats anything 2.2× above it as speech, and ends the turn after
-**850 ms** of quiet. Speech shorter than **350 ms** is ignored as a cough, a turn is cut at **30 s** so a
-stuck gate cannot upload minutes of audio, and the **300 ms** before speech was detected is kept so the
-first word survives. The microphone is gated off while the reply plays, so it never answers itself.
+**How the turn ends.** Voice activity detection runs in the browser on raw PCM.
+
+The noise floor is the **20th percentile of the last 1.8 seconds** — what the room sounds like when
+nobody is talking. Two earlier attempts were wrong in ways worth recording. Measuring the floor once at
+start-up meant a throat-clear during that second poisoned it for the whole session. Replacing that with
+a running average was worse: it converges too slowly to be right in the first second, and speech drags
+it upward, raising the bar exactly when someone is trying to clear it. A percentile ignores the loud
+tail entirely and settles in about a second.
+
+Two thresholds, not one: opening a turn takes a clear signal, continuing it takes much less, because
+the gaps between words are quieter than the words. **Speech time accumulates and decays rather than
+resetting** — the first version zeroed it on any quiet block, so only a continuous shout could ever
+open the gate, which is exactly how it failed in use.
+
+A turn ends after **700 ms** of quiet, anything under **200 ms** is a cough, a turn is cut at **30 s**,
+and the **400 ms** before speech was detected is kept so the first word survives. The microphone is
+gated off while the reply plays, so it never answers itself. The visualiser draws the opening threshold
+as a pair of faint lines, so it is visible when a voice simply is not clearing it.
+
+**Sensitivity** is a control on the page, because only the person in the room knows whether there is a
+fan running. `vad_sim.js` replays the gate offline against synthetic speech at several volumes — the
+gate cannot be tested from a terminal, and every bug above was found by replaying it rather than by
+reading the code.
 
 The browser sends 16 kHz mono WAV it encodes itself, so the server never has to decode a container
 format. That removes the whole class of "every .webm upload 500s" failures, and 16 kHz is what every

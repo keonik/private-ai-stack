@@ -226,11 +226,19 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
     r = await upstream("POST", "/chat/completions", json={
         "model": choice["id"], "max_tokens": 220, "temperature": 0.4, **choice["extra"],
         "messages": [
-            {"role": "system", "content": "You are a voice assistant running on a Mac in someone's office. "
-                                          "You are being spoken to out loud and your reply will be read aloud, "
-                                          "so answer in at most three sentences, plainly, with no lists and no "
-                                          "markdown. If asked what you are, say you are an open-weight model "
-                                          "running locally."},
+            {"role": "system", "content":
+                "You are a voice assistant running on a Mac in someone's office. You are being spoken to out "
+                "loud and your reply is read aloud, so answer in at most three sentences, plainly, with no "
+                "lists and no markdown.\n"
+                # Without this paragraph it offers to play soothing sounds and short stories, then plays
+                # nothing, because speaking is the only thing it can actually do.
+                "Talking is the only thing you can do. You cannot play music, sounds or recordings, set "
+                "timers or reminders, send anything, search the web, open files, or control this computer. "
+                "Never offer to do any of those, and never say you are about to play something. If someone "
+                "asks for a story, a calming exercise or a joke, simply say it yourself, now, in your reply. "
+                "If they ask for something you genuinely cannot do, say so in one sentence and offer what you "
+                "can.\n"
+                "If asked what you are, say you are an open-weight model running locally."},
             *history,
             {"role": "user", "content": text}]})
     took = time.time() - t0
