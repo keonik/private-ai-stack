@@ -7,46 +7,54 @@
 <style>
   :root {
     --ground:#EDEEE9; --card:#FBFBF9; --ink:#16191A; --soft:#3E4749; --muted:#6B7679;
-    --rule:#CFD4CE; --accent:#245D63; --accent-soft:#D8E6E7; --live:#A03A2E;
+    --rule:#CFD4CE; --accent:#245D63; --accent-soft:#D8E6E7; --live:#A03A2E; --you:#2F5D45;
     --mono: ui-monospace,"SF Mono",Menlo,monospace;
     --sans: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   }
   @media (prefers-color-scheme: dark){ :root:not([data-theme=light]){
     --ground:#0F1315; --card:#181D1F; --ink:#E2E7E6; --soft:#BAC3C3; --muted:#8A9496;
-    --rule:#2B3335; --accent:#6DB7BD; --accent-soft:#17302F; --live:#E08C7D; } }
+    --rule:#2B3335; --accent:#6DB7BD; --accent-soft:#17302F; --live:#E08C7D; --you:#84C0A0; } }
   :root[data-theme=dark]{ --ground:#0F1315; --card:#181D1F; --ink:#E2E7E6; --soft:#BAC3C3;
-    --muted:#8A9496; --rule:#2B3335; --accent:#6DB7BD; --accent-soft:#17302F; --live:#E08C7D; }
+    --muted:#8A9496; --rule:#2B3335; --accent:#6DB7BD; --accent-soft:#17302F; --live:#E08C7D; --you:#84C0A0; }
   *{box-sizing:border-box}
   body{margin:0;padding:0 20px 72px;background:var(--ground);color:var(--ink);
        font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
   .wrap{max-width:720px;margin:0 auto}
-  header{padding:56px 0 24px;border-bottom:2px solid var(--ink);display:flex;flex-direction:column;gap:12px}
+  header{padding:52px 0 22px;border-bottom:2px solid var(--ink);display:flex;flex-direction:column;gap:12px}
   .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
-  h1{font-size:clamp(28px,6vw,40px);line-height:1.05;margin:0;letter-spacing:-.02em;text-wrap:balance}
+  h1{font-size:clamp(27px,6vw,38px);line-height:1.05;margin:0;letter-spacing:-.02em;text-wrap:balance}
   .deck{margin:0;color:var(--soft);max-width:52ch}
-  main{padding-top:32px;display:flex;flex-direction:column;gap:20px}
-  .stage{background:var(--card);border:1px solid var(--rule);padding:26px;display:flex;
-         flex-direction:column;align-items:center;gap:16px;text-align:center}
-  button.mic{appearance:none;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);
-    font-family:var(--mono);font-size:14px;letter-spacing:.04em;padding:16px 28px;border-radius:999px;cursor:pointer}
-  button.mic[disabled]{opacity:.5;cursor:default}
-  button.mic.rec{background:var(--live);border-color:var(--live);color:#fff}
-  .hint{font-size:13.5px;color:var(--muted);margin:0}
-  .voice{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+  main{padding-top:28px;display:flex;flex-direction:column;gap:18px}
+
+  .stage{background:var(--card);border:1px solid var(--rule);padding:22px;display:flex;
+         flex-direction:column;align-items:center;gap:14px;text-align:center}
+  button.talk{appearance:none;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);
+    font-family:var(--mono);font-size:14px;letter-spacing:.04em;padding:15px 30px;border-radius:999px;cursor:pointer}
+  button.talk[disabled]{opacity:.5;cursor:default}
+  button.talk.on{background:var(--live);border-color:var(--live);color:#fff}
+  .state{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+         display:flex;align-items:center;gap:9px;min-height:18px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--rule);flex:0 0 auto}
+  .dot.listen{background:var(--you)} .dot.hear{background:var(--live)}
+  .dot.work{background:var(--accent)} .dot.speak{background:var(--accent)}
+  .meter{width:220px;max-width:100%;height:4px;background:var(--rule);border-radius:2px;overflow:hidden}
+  .meter i{display:block;height:100%;width:0;background:var(--you);transition:width .08s linear}
+  .voice{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);flex-wrap:wrap;justify-content:center}
   .voice select{font-family:var(--mono);font-size:13px;padding:7px 10px;border:1px solid var(--rule);
-    border-radius:4px;background:var(--card);color:var(--ink);max-width:16rem}
+    border-radius:4px;background:var(--card);color:var(--ink);max-width:15rem}
   .voice select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-  .steps{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
-  .step{background:var(--card);padding:14px 16px;display:grid;grid-template-columns:92px 1fr auto;
-        gap:12px;align-items:baseline}
-  .step .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
-  .step .v{min-width:0;overflow-wrap:anywhere}
-  .step .t{font-family:var(--mono);font-size:12px;color:var(--accent);white-space:nowrap}
-  .step.idle .v{color:var(--muted)}
-  audio{width:100%;margin-top:4px}
-  .foot{font-family:var(--mono);font-size:12px;color:var(--muted);border-top:1px solid var(--rule);
-        padding-top:16px;display:flex;flex-wrap:wrap;gap:6px 20px}
+  .hint{font-size:13px;color:var(--muted);margin:0;max-width:46ch}
   .err{color:var(--live);font-size:14px;margin:0}
+
+  .turns{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
+  .turn{background:var(--card);padding:13px 16px;display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:baseline}
+  .turn .who{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .turn.you .who{color:var(--you)}
+  .turn .what{min-width:0;overflow-wrap:anywhere}
+  .turn .t{font-family:var(--mono);font-size:11.5px;color:var(--accent);white-space:nowrap}
+  .empty{background:var(--card);padding:15px 16px;color:var(--muted);font-size:14px}
+  .foot{font-family:var(--mono);font-size:12px;color:var(--muted);border-top:1px solid var(--rule);
+        padding-top:14px;display:flex;flex-wrap:wrap;gap:6px 20px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -55,96 +63,80 @@
   <header>
     <span class="eyebrow">Private AI stack &middot; speech demo</span>
     <h1>Talk to a Mac that never sends your voice anywhere</h1>
-    <p class="deck">Your recording goes to one machine in an office in Ohio, is transcribed there, answered
-    there and spoken back from there. No cloud model hears it, and nothing is kept.</p>
+    <p class="deck">Start the conversation and just speak. It notices when you stop, answers, and listens
+    again. Everything happens on one machine in an office in Ohio, and nothing is kept.</p>
   </header>
 
   <main>
     <div class="stage">
-      <button id="mic" class="mic">Hold to talk</button>
-      <p class="hint" id="hint">Press and hold, say something, let go. Your browser will ask for the microphone.</p>
+      <button id="talk" class="talk">Start conversation</button>
+      <div class="state"><span class="dot" id="dot"></span><span id="stateText">Not listening</span></div>
+      <div class="meter" aria-hidden="true"><i id="level"></i></div>
       <label class="voice"><span>Reply voice</span>
         <select id="voice" aria-label="Reply voice"><option value="af_heart">Heart · American English</option></select>
       </label>
+      <p class="hint" id="hint">Your browser will ask for the microphone. It only sends a clip once you stop speaking.</p>
       <p class="err" id="err" hidden></p>
     </div>
 
-    <div class="steps">
-      <div class="step idle" id="s-hear"><span class="k">You said</span><span class="v" id="v-hear">&mdash;</span><span class="t" id="t-hear"></span></div>
-      <div class="step idle" id="s-think"><span class="k">Answer</span><span class="v" id="v-think">&mdash;</span><span class="t" id="t-think"></span></div>
-      <div class="step idle" id="s-say"><span class="k">Spoken</span><span class="v" id="v-say">&mdash;<audio id="player" controls hidden></audio></span><span class="t" id="t-say"></span></div>
-    </div>
-
-    <p class="foot" id="foot"><span>open-weight models</span><span>one Mac</span><span>no recording stored</span></p>
+    <div class="turns" id="turns"><div class="empty" id="empty">Nothing said yet.</div></div>
+    <audio id="player" hidden></audio>
+    <p class="foot" id="foot"><span>open-weight models</span><span>one Mac</span><span>nothing stored</span></p>
   </main>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const mic = $("mic"), err = $("err");
-let media, chunks = [], recording = false, startedAt = 0;
+const talk = $("talk"), err = $("err"), dot = $("dot"), stateText = $("stateText"), level = $("level");
 
+// Voice activity detection, tuned by ear on a normal room. Speech has to clear the measured noise
+// floor for a moment before it counts, and a pause has to last before the turn is considered over —
+// otherwise every breath either starts or ends a turn.
+const SILENCE_MS = 850;      // pause that ends your turn
+const MIN_SPEECH_MS = 350;   // shorter than this is a cough, not a sentence
+const MAX_TURN_MS = 30000;   // hard stop, so a stuck gate cannot upload minutes of audio
+const PREROLL_MS = 300;      // kept before speech is detected, so the first word survives
+const OUT_RATE = 16000;
+
+let ctx, stream, node, running = false, busy = false;
+let floorSum = 0, floorN = 0, noiseFloor = 0.008;
+let speaking = false, speechMs = 0, silenceMs = 0;
+let preroll = [], prerollFrames = 0, utterance = [], utteranceFrames = 0;
+const history = [];
+
+function setState(cls, text){ dot.className = "dot " + cls; stateText.textContent = text; }
 function fail(msg){ err.textContent = msg; err.hidden = false; }
-function clearFail(){ err.hidden = true; }
-function set(step, text, timing){
-  $("v-" + step).childNodes[0].nodeValue = text;
-  $("t-" + step).textContent = timing || "";
-  $("s-" + step).classList.remove("idle");
+
+function addTurn(who, text, timing){
+  $("empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "turn" + (who === "You" ? " you" : "");
+  el.innerHTML = `<span class="who"></span><span class="what"></span><span class="t"></span>`;
+  el.children[0].textContent = who;
+  el.children[1].textContent = text;
+  el.children[2].textContent = timing || "";
+  $("turns").appendChild(el);
+  el.scrollIntoView({ block: "nearest" });
+  return el;
 }
 
-// Record with MediaRecorder, then re-encode to 16 kHz mono WAV in the browser. The server never has
-// to decode a container format, which removes a whole class of upload failures.
-async function toWav(blob){
-  const buf = await blob.arrayBuffer();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const decoded = await ctx.decodeAudioData(buf);
-  const rate = 16000, src = decoded.getChannelData(0);
-  const ratio = decoded.sampleRate / rate, n = Math.floor(src.length / ratio);
+function downsampleToWav(blocks, frames, inRate){
+  const joined = new Float32Array(frames);
+  let at = 0;
+  for (const b of blocks){ joined.set(b, at); at += b.length; }
+  const ratio = inRate / OUT_RATE, n = Math.floor(joined.length / ratio);
   const pcm = new Int16Array(n);
   for (let i = 0; i < n; i++){
-    const s = Math.max(-1, Math.min(1, src[Math.floor(i * ratio)]));
+    const s = Math.max(-1, Math.min(1, joined[Math.floor(i * ratio)]));
     pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   const head = new ArrayBuffer(44), dv = new DataView(head);
-  const str = (o, s) => [...s].forEach((c, i) => dv.setUint8(o + i, c.charCodeAt(0)));
+  const str = (o, t) => [...t].forEach((c, i) => dv.setUint8(o + i, c.charCodeAt(0)));
   str(0, "RIFF"); dv.setUint32(4, 36 + pcm.byteLength, true); str(8, "WAVEfmt ");
   dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
-  dv.setUint32(24, rate, true); dv.setUint32(28, rate * 2, true); dv.setUint16(32, 2, true);
+  dv.setUint32(24, OUT_RATE, true); dv.setUint32(28, OUT_RATE * 2, true); dv.setUint16(32, 2, true);
   dv.setUint16(34, 16, true); str(36, "data"); dv.setUint32(40, pcm.byteLength, true);
-  await ctx.close();
-  return { blob: new Blob([head, pcm], { type: "audio/wav" }), seconds: n / rate };
-}
-
-async function run(blob){
-  mic.disabled = true; mic.textContent = "Working…";
-  try {
-    const { blob: wav, seconds } = await toWav(blob);
-    if (seconds < 0.4) throw new Error("That was too short to hear. Hold the button while you speak.");
-
-    const fd = new FormData();
-    fd.append("audio", wav, "clip.wav");
-    fd.append("seconds", seconds.toFixed(2));
-    const hear = await post("/api/transcribe", { body: fd });
-    if (!hear.text) throw new Error("Nothing was heard in that clip.");
-    set("hear", hear.text, hear.realtime ? `${hear.seconds}s · ${hear.realtime}× realtime` : `${hear.seconds}s`);
-
-    const think = await post("/api/reply", { json: { text: hear.text } });
-    set("think", think.text, `${think.seconds}s`);
-
-    const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
-                                          body: JSON.stringify({ text: think.text, voice: $("voice").value }) });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Speech synthesis failed.");
-    const audio = await r.blob();
-    const player = $("player");
-    player.src = URL.createObjectURL(audio);
-    player.hidden = false;
-    set("say", "", `${r.headers.get("X-Synthesis-Seconds") || "?"}s to synthesise`);
-    player.play().catch(() => {});
-  } catch (e) {
-    fail(e.message || String(e));
-  } finally {
-    mic.disabled = false; mic.textContent = "Hold to talk";
-  }
+  return { blob: new Blob([head, pcm], { type: "audio/wav" }), seconds: n / OUT_RATE };
 }
 
 async function post(url, opts){
@@ -157,26 +149,116 @@ async function post(url, opts){
   return d;
 }
 
-async function start(){
-  clearFail();
-  if (recording) return;
+async function handleTurn(blocks, frames, inRate){
+  busy = true;
   try {
-    if (!media) media = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch { return fail("The microphone was not allowed, so there is nothing to send."); }
-  chunks = [];
-  const rec = new MediaRecorder(media);
-  rec.ondataavailable = e => chunks.push(e.data);
-  rec.onstop = () => run(new Blob(chunks, { type: rec.mimeType }));
-  rec.start(); recording = rec; startedAt = Date.now();
-  mic.classList.add("rec"); mic.textContent = "Listening… let go";
+    const { blob, seconds } = downsampleToWav(blocks, frames, inRate);
+    setState("work", "Transcribing");
+    const fd = new FormData();
+    fd.append("audio", blob, "clip.wav");
+    fd.append("seconds", seconds.toFixed(2));
+    const heard = await post("/api/transcribe", { body: fd });
+    if (!heard.text){ setState("listen", "Listening"); busy = false; return; }
+    addTurn("You", heard.text, heard.realtime ? `${heard.realtime}× realtime` : `${heard.seconds}s`);
+    history.push({ role: "user", content: heard.text });
+
+    setState("work", "Thinking");
+    const said = await post("/api/reply", { json: { text: heard.text, history: history.slice(0, -1) } });
+    const row = addTurn("Mac", said.text, `${said.seconds}s`);
+    history.push({ role: "assistant", content: said.text });
+
+    setState("speak", "Speaking");
+    const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
+                                          body: JSON.stringify({ text: said.text, voice: $("voice").value }) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Speech synthesis failed.");
+    const player = $("player");
+    player.src = URL.createObjectURL(await r.blob());
+    row.children[2].textContent += ` · ${r.headers.get("X-Synthesis-Seconds") || "?"}s to speak`;
+    await new Promise(done => { player.onended = player.onerror = done; player.play().catch(done); });
+  } catch (e) {
+    fail(e.message || String(e));
+  } finally {
+    // Reset the gate so the tail of the reply, or a cough during it, does not start a turn.
+    speaking = false; speechMs = silenceMs = 0;
+    utterance = []; utteranceFrames = 0; preroll = []; prerollFrames = 0;
+    busy = false;
+    if (running) setState("listen", "Listening");
+  }
 }
+
+function onAudio(e){
+  const buf = e.inputBuffer.getChannelData(0);
+  const ms = (buf.length / ctx.sampleRate) * 1000;
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  const rms = Math.sqrt(sum / buf.length);
+
+  if (floorN < 12){ floorSum += rms; floorN++; noiseFloor = Math.max(0.004, (floorSum / floorN) * 1.6); return; }
+  level.style.width = Math.min(100, (rms / (noiseFloor * 8)) * 100) + "%";
+  if (busy || !running) return;
+
+  const loud = rms > noiseFloor * 2.2;
+  const copy = new Float32Array(buf);
+
+  if (!speaking){
+    preroll.push(copy); prerollFrames += copy.length;
+    const maxFrames = (PREROLL_MS / 1000) * ctx.sampleRate;
+    while (prerollFrames > maxFrames){ prerollFrames -= preroll.shift().length; }
+    if (loud){
+      speechMs += ms;
+      if (speechMs >= MIN_SPEECH_MS){
+        speaking = true; silenceMs = 0;
+        utterance = preroll.slice(); utteranceFrames = prerollFrames;
+        preroll = []; prerollFrames = 0;
+        setState("hear", "Hearing you");
+      }
+    } else speechMs = 0;
+    return;
+  }
+
+  utterance.push(copy); utteranceFrames += copy.length;
+  silenceMs = loud ? 0 : silenceMs + ms;
+  const turnMs = (utteranceFrames / ctx.sampleRate) * 1000;
+  if (silenceMs >= SILENCE_MS || turnMs >= MAX_TURN_MS){
+    const blocks = utterance, frames = utteranceFrames, rate = ctx.sampleRate;
+    speaking = false; speechMs = silenceMs = 0; utterance = []; utteranceFrames = 0;
+    if ((frames / rate) * 1000 >= MIN_SPEECH_MS) handleTurn(blocks, frames, rate);
+  }
+}
+
+async function start(){
+  err.hidden = true;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  } catch { return fail("The microphone was not allowed, so there is nothing to listen to."); }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream);
+  node = ctx.createScriptProcessor(4096, 1, 1);
+  node.onaudioprocess = onAudio;
+  src.connect(node);
+  // Route to a muted gain node: some browsers will not run the processor unless it reaches the graph's end.
+  const mute = ctx.createGain(); mute.gain.value = 0;
+  node.connect(mute); mute.connect(ctx.destination);
+  running = true; floorSum = 0; floorN = 0;
+  talk.classList.add("on"); talk.textContent = "Stop";
+  setState("listen", "Listening");
+  $("hint").textContent = "Speak whenever you like. It sends a clip only after you pause.";
+}
+
 function stop(){
-  if (!recording) return;
-  recording.stop(); recording = false;
-  mic.classList.remove("rec"); mic.textContent = "Hold to talk";
+  running = false; busy = false;
+  try { node && (node.onaudioprocess = null, node.disconnect()); } catch {}
+  try { stream && stream.getTracks().forEach(t => t.stop()); } catch {}
+  try { ctx && ctx.close(); } catch {}
+  const player = $("player"); player.pause();
+  talk.classList.remove("on"); talk.textContent = "Start conversation";
+  setState("", "Not listening"); level.style.width = "0";
+  $("hint").textContent = "Your browser will ask for the microphone. It only sends a clip once you stop speaking.";
 }
-["mousedown", "touchstart"].forEach(e => mic.addEventListener(e, ev => { ev.preventDefault(); start(); }));
-["mouseup", "mouseleave", "touchend"].forEach(e => mic.addEventListener(e, stop));
+
+talk.addEventListener("click", () => running ? stop() : start());
+window.addEventListener("pagehide", stop);
 
 fetch("/api/voices").then(r => r.json()).then(d => {
   const sel = $("voice"), saved = (() => { try { return localStorage.getItem("voice"); } catch { return null; } })();
@@ -188,8 +270,7 @@ fetch("/api/voices").then(r => r.json()).then(d => {
     g.label = lang;
     groups[lang].forEach(v => {
       const o = document.createElement("option");
-      o.value = v.id;
-      o.textContent = `${v.label} · ${v.gender}`;
+      o.value = v.id; o.textContent = `${v.label} · ${v.gender}`;
       g.appendChild(o);
     });
     sel.appendChild(g);
@@ -200,7 +281,7 @@ fetch("/api/voices").then(r => r.json()).then(d => {
 
 fetch("/api/health").then(r => r.json()).then(d => {
   $("foot").innerHTML = `<span>${d.models.stt} · transcription</span><span>${d.models.chat} · answer</span>` +
-                        `<span>${d.models.tts} · speech</span><span>no recording stored</span>`;
+                        `<span>${d.models.tts} · speech</span><span>nothing stored</span>`;
 }).catch(() => {});
 </script>
 </body>

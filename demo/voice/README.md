@@ -8,9 +8,22 @@ demo has no path to any document corpus — it exists to show the speech loop, n
 browser ──► this app (VPS) ──► private endpoint (a Mac) ──► transcribe → answer → speak
 ```
 
-The browser re-encodes its recording to 16 kHz mono WAV before uploading, so the server never has to
-decode a container format. That removes the whole class of "every .webm upload 500s" failures, and
-16 kHz is what every backend resamples to anyway.
+You press start once and talk. The page listens continuously, notices when you stop, sends that turn,
+speaks the answer and listens again — no push-to-talk.
+
+**How the turn ends.** Voice activity detection runs in the browser on raw PCM: it measures the room's
+noise floor for the first half second, treats anything 2.2× above it as speech, and ends the turn after
+**850 ms** of quiet. Speech shorter than **350 ms** is ignored as a cough, a turn is cut at **30 s** so a
+stuck gate cannot upload minutes of audio, and the **300 ms** before speech was detected is kept so the
+first word survives. The microphone is gated off while the reply plays, so it never answers itself.
+
+The browser sends 16 kHz mono WAV it encodes itself, so the server never has to decode a container
+format. That removes the whole class of "every .webm upload 500s" failures, and 16 kHz is what every
+backend resamples to anyway.
+
+**Conversation memory** is the last six turns, sent with each request. The server coerces every role to
+user or assistant and truncates each turn, because the client is untrusted and an unbounded history is
+a way to make someone else's GPU do free work.
 
 ## Run it
 

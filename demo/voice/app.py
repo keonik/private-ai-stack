@@ -178,13 +178,24 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
     text = (payload.get("text") or "").strip()[:MAX_TEXT]
     if not text:
         raise HTTPException(400, "Nothing to answer.")
+    # A spoken conversation needs the last few turns or every answer restarts from nothing. Capped hard:
+    # the client is untrusted, and an unbounded history is a way to make someone else's GPU do free work.
+    history = []
+    for turn in (payload.get("history") or [])[-6:]:
+        role = "assistant" if turn.get("role") == "assistant" else "user"
+        content = str(turn.get("content") or "").strip()[:MAX_TEXT]
+        if content:
+            history.append({"role": role, "content": content})
     t0 = time.time()
     r = await upstream("POST", "/chat/completions", json={
         "model": CHAT_MODEL, "max_tokens": 120, "temperature": 0.4,
         "messages": [
             {"role": "system", "content": "You are a voice assistant running on a Mac in someone's office. "
-                                          "Answer in at most three sentences, plainly, no lists, no markdown. "
-                                          "If asked what you are, say you are an open-weight model running locally."},
+                                          "You are being spoken to out loud and your reply will be read aloud, "
+                                          "so answer in at most three sentences, plainly, with no lists and no "
+                                          "markdown. If asked what you are, say you are an open-weight model "
+                                          "running locally."},
+            *history,
             {"role": "user", "content": text}]})
     took = time.time() - t0
     msg = r.json()["choices"][0]["message"].get("content") or ""
