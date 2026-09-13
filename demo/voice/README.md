@@ -31,6 +31,26 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 | `DAILY_BUDGET` | `2000` | requests per UTC day before the demo closes itself |
 | `DEMO_ENABLED` | `1` | set to `0` to take it down without redeploying |
 
+## Voices
+
+Kokoro ships 54 voice files. **41 synthesise on this engine; all 13 Japanese and Chinese ones return
+500**, because they need misaki's `ja` / `zh` phonemizers, which the engine's environment does not
+carry. The page offers only the working 41, grouped by language:
+
+| language | voices |
+|---|---|
+| American English | 20 |
+| British English | 8 |
+| Hindi | 4 |
+| Spanish, Brazilian Portuguese | 3 each |
+| Italian | 2 |
+| French | 1 |
+
+The list is checked into `app.py` rather than discovered at runtime, because this app runs on a
+different machine from the model directory. An unknown voice is refused here with a 400 rather than
+forwarded, since the engine answers one with a 500 quoting a filesystem path. Re-run `check_voices.sh`
+on the machine holding the models if the engine's packages change.
+
 ## Guards, because this points at someone's GPU
 
 Twenty requests per five minutes per address, a four megabyte upload ceiling (about two minutes of

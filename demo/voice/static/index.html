@@ -32,6 +32,10 @@
   button.mic[disabled]{opacity:.5;cursor:default}
   button.mic.rec{background:var(--live);border-color:var(--live);color:#fff}
   .hint{font-size:13.5px;color:var(--muted);margin:0}
+  .voice{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+  .voice select{font-family:var(--mono);font-size:13px;padding:7px 10px;border:1px solid var(--rule);
+    border-radius:4px;background:var(--card);color:var(--ink);max-width:16rem}
+  .voice select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .steps{display:flex;flex-direction:column;gap:1px;background:var(--rule);border:1px solid var(--rule)}
   .step{background:var(--card);padding:14px 16px;display:grid;grid-template-columns:92px 1fr auto;
         gap:12px;align-items:baseline}
@@ -59,6 +63,9 @@
     <div class="stage">
       <button id="mic" class="mic">Hold to talk</button>
       <p class="hint" id="hint">Press and hold, say something, let go. Your browser will ask for the microphone.</p>
+      <label class="voice"><span>Reply voice</span>
+        <select id="voice" aria-label="Reply voice"><option value="af_heart">Heart · American English</option></select>
+      </label>
       <p class="err" id="err" hidden></p>
     </div>
 
@@ -125,7 +132,7 @@ async function run(blob){
     set("think", think.text, `${think.seconds}s`);
 
     const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" },
-                                          body: JSON.stringify({ text: think.text }) });
+                                          body: JSON.stringify({ text: think.text, voice: $("voice").value }) });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "Speech synthesis failed.");
     const audio = await r.blob();
     const player = $("player");
@@ -170,6 +177,26 @@ function stop(){
 }
 ["mousedown", "touchstart"].forEach(e => mic.addEventListener(e, ev => { ev.preventDefault(); start(); }));
 ["mouseup", "mouseleave", "touchend"].forEach(e => mic.addEventListener(e, stop));
+
+fetch("/api/voices").then(r => r.json()).then(d => {
+  const sel = $("voice"), saved = (() => { try { return localStorage.getItem("voice"); } catch { return null; } })();
+  const groups = {};
+  d.voices.forEach(v => (groups[v.language] ||= []).push(v));
+  sel.innerHTML = "";
+  Object.keys(groups).forEach(lang => {
+    const g = document.createElement("optgroup");
+    g.label = lang;
+    groups[lang].forEach(v => {
+      const o = document.createElement("option");
+      o.value = v.id;
+      o.textContent = `${v.label} · ${v.gender}`;
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  });
+  sel.value = (saved && d.voices.some(v => v.id === saved)) ? saved : d.default;
+  sel.addEventListener("change", () => { try { localStorage.setItem("voice", sel.value); } catch {} });
+}).catch(() => {});
 
 fetch("/api/health").then(r => r.json()).then(d => {
   $("foot").innerHTML = `<span>${d.models.stt} · transcription</span><span>${d.models.chat} · answer</span>` +

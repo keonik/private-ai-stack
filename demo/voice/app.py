@@ -38,6 +38,34 @@ MAX_AUDIO_BYTES = 4 * 1024 * 1024   # ~2 minutes of 16 kHz mono WAV
 MAX_TEXT = 400
 PER_IP = (20, 300)                   # 20 requests per 5 minutes per address
 
+# Kokoro ships 54 voice files; 41 of them synthesise on this engine. Every Japanese (jf_/jm_) and
+# Chinese (zf_/zm_) voice returns 500 — those need misaki's ja/zh phonemizers, which the engine's
+# environment does not carry. The list is checked in rather than discovered because this app runs on a
+# different machine from the model directory, and offering a voice that 500s is worse than not
+# offering it. Re-test with demo/voice/check_voices.sh if the engine's packages change.
+VOICE_LANGS = {"a": "American English", "b": "British English", "e": "Spanish",
+               "f": "French", "h": "Hindi", "i": "Italian", "p": "Brazilian Portuguese"}
+VOICES = [
+    "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore", "af_nicole", "af_nova",
+    "af_river", "af_sarah", "af_sky", "am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
+    "am_michael", "am_onyx", "am_puck", "am_santa",
+    "bf_alice", "bf_emma", "bf_isabella", "bf_lily", "bm_daniel", "bm_fable", "bm_george", "bm_lewis",
+    "ef_dora", "em_alex", "em_santa", "ff_siwis",
+    "hf_alpha", "hf_beta", "hm_omega", "hm_psi", "if_sara", "im_nicola",
+    "pf_dora", "pm_alex", "pm_santa",
+]
+DEFAULT_VOICE = "af_heart"
+
+
+def voice_catalogue() -> list[dict]:
+    """Grouped for a picker: language from the first letter, gender from the second."""
+    out = []
+    for v in VOICES:
+        lang, gender = VOICE_LANGS.get(v[0], "Other"), "female" if v[1] == "f" else "male"
+        out.append({"id": v, "label": v.split("_", 1)[1].title(), "language": lang, "gender": gender})
+    return out
+
+
 _hits: dict[str, deque] = defaultdict(deque)
 _day = ["", 0]
 
@@ -122,6 +150,11 @@ def health() -> JSONResponse:
                          "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
 
 
+@app.get("/api/voices")
+def voices() -> JSONResponse:
+    return JSONResponse({"default": DEFAULT_VOICE, "voices": voice_catalogue()})
+
+
 @app.post("/api/transcribe")
 async def transcribe(request: Request, audio: UploadFile, seconds: float = Form(0.0)) -> JSONResponse:
     guard(request)
@@ -164,9 +197,10 @@ async def speak(request: Request, payload: dict) -> Response:
     text = (payload.get("text") or "").strip()[:MAX_TEXT]
     if not text:
         raise HTTPException(400, "Nothing to say.")
-    voice = payload.get("voice") or "af_heart"
-    if not voice.replace("_", "").isalnum():
-        raise HTTPException(400, "Unknown voice.")
+    voice = payload.get("voice") or DEFAULT_VOICE
+    if voice not in VOICES:
+        # The engine answers an unknown voice with a 500 quoting a filesystem path, so catch it here.
+        raise HTTPException(400, "That voice is not available.")
     t0 = time.time()
     r = await upstream("POST", "/audio/speech", json={"model": TTS_MODEL, "input": text,
                                                       "voice": voice, "response_format": "wav"})
