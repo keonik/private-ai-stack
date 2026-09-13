@@ -37,7 +37,7 @@
   .dot{width:9px;height:9px;border-radius:50%;background:var(--rule);flex:0 0 auto}
   .dot.listen{background:var(--you)} .dot.hear{background:var(--live)}
   .dot.work{background:var(--accent)} .dot.speak{background:var(--accent)}
-  .viz{width:100%;max-width:320px;height:56px;display:block}
+  .viz{width:200px;height:200px;display:block;margin:2px auto}
   .picks{display:flex;flex-wrap:wrap;gap:10px 22px;justify-content:center}
   .voice{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);flex-wrap:wrap;justify-content:center}
   .voice select{font-family:var(--mono);font-size:13px;padding:7px 10px;border:1px solid var(--rule);
@@ -71,7 +71,7 @@
     <div class="stage">
       <button id="talk" class="talk">Start conversation</button>
       <div class="state"><span class="dot" id="dot"></span><span id="stateText">Not listening</span></div>
-      <canvas id="viz" class="viz" width="640" height="112" aria-hidden="true"></canvas>
+      <canvas id="viz" class="viz" width="400" height="400" aria-hidden="true"></canvas>
       <div class="picks">
         <label class="voice"><span>Answers from</span>
           <select id="model" aria-label="Chat model"><option value="gemma4-e4b-mlx">Gemma 4 E4B</option></select>
@@ -129,17 +129,25 @@ let speaking = false, speechMs = 0, silenceMs = 0;
 let preroll = [], prerollFrames = 0, utterance = [], utteranceFrames = 0;
 const history = [];
 
-function setState(cls, text){ dot.className = "dot " + cls; stateText.textContent = text; }
+// One vocabulary for the whole loop, borrowed from the AI SDK's Persona component: asleep, listening,
+// hearing, thinking, speaking. The difference here is that three of the five are driven by real
+// amplitude rather than a canned animation — only `thinking` has nothing to listen to, so only that one
+// is synthesised. That keeps the loading state visually part of the same object instead of a spinner.
+let phase = "asleep";
+function setState(cls, text){
+  dot.className = "dot " + cls;
+  stateText.textContent = text;
+  phase = { "": "asleep", listen: "listening", hear: "hearing", work: "thinking", speak: "speaking" }[cls] || "asleep";
+}
 const remembered = k => { try { return localStorage.getItem(k); } catch { return null; } };
 
-// Amplitude over time, mirrored around the centre line. Green while you speak, teal while the Mac
-// answers, flat grey when neither — so a glance tells you who has the floor and whether the
-// microphone is actually hearing anything.
+// A ring of radial bars around a still centre. Each bar is one moment of sound, newest at the top,
+// sweeping clockwise — so speech reads as a wave travelling around the circle rather than a meter
+// jumping up and down.
 const viz = $("viz"), vctx = viz.getContext("2d");
-const BARS = 64;
+const BARS = 72;
 const wave = new Array(BARS).fill(0);
 const waveWho = new Array(BARS).fill("idle");
-let vizRaf = 0;
 
 function pushLevel(v, who){
   wave.push(Math.max(0, Math.min(1, v)));
@@ -150,36 +158,70 @@ function pushLevel(v, who){
 function palette(){
   const css = getComputedStyle(document.documentElement);
   return { you: css.getPropertyValue("--you").trim(), mac: css.getPropertyValue("--accent").trim(),
-           idle: css.getPropertyValue("--rule").trim() };
+           idle: css.getPropertyValue("--rule").trim(), muted: css.getPropertyValue("--muted").trim() };
 }
 
-function drawViz(){
+function drawViz(now){
   const dpr = window.devicePixelRatio || 1;
-  const w = viz.clientWidth || 320, h = viz.clientHeight || 56;
+  const w = viz.clientWidth || 200, h = viz.clientHeight || 200;
   if (viz.width !== Math.round(w * dpr)){ viz.width = Math.round(w * dpr); viz.height = Math.round(h * dpr); }
   vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   vctx.clearRect(0, 0, w, h);
-  const gap = 2, bw = Math.max(1.5, (w - gap * (BARS - 1)) / BARS), mid = h / 2, pal = palette();
-  // Where the gate opens, drawn to the same scale as the bars, so it is obvious when your voice is
-  // simply not clearing it.
-  if (running){
-    const t = Math.min(0.95, startT / (noiseFloor * 9 || 1)) * (h - 6);
-    vctx.fillStyle = pal.idle; vctx.globalAlpha = 0.9;
-    vctx.fillRect(0, mid - t / 2, w, 1);
-    vctx.fillRect(0, mid + t / 2, w, 1);
-    vctx.globalAlpha = 1;
+
+  const pal = palette(), cx = w / 2, cy = h / 2;
+  const R = Math.min(w, h) * 0.27, reach = Math.min(w, h) * 0.19;
+  const t = (now || 0) / 1000;
+  const breathe = 1 + Math.sin(t * 1.6) * (phase === "asleep" ? 0.012 : 0.02);
+
+  // Colour follows the state, not the sample, so the ring reads as one object changing mood.
+  const tone = { asleep: pal.idle, listening: pal.you, hearing: pal.you,
+                 thinking: pal.mac, speaking: pal.mac }[phase];
+
+  // Where the gate opens, as a faint circle — visible proof of why quiet speech may not register.
+  if (phase === "listening" || phase === "hearing"){
+    const tr = Math.min(0.95, startT / (noiseFloor * 9 || 1));
+    vctx.beginPath();
+    vctx.arc(cx, cy, R * breathe + 4 + tr * reach, 0, Math.PI * 2);
+    vctx.strokeStyle = pal.idle; vctx.globalAlpha = 0.55; vctx.lineWidth = 1;
+    vctx.setLineDash([2, 4]); vctx.stroke(); vctx.setLineDash([]);
   }
-  for (let i = 0; i < BARS; i++){
-    const amp = wave[i], x = i * (bw + gap);
-    const bh = Math.max(1.5, amp * (h - 6));
-    vctx.fillStyle = pal[waveWho[i]];
-    vctx.globalAlpha = waveWho[i] === "idle" ? 0.5 : 1;
-    vctx.fillRect(x, mid - bh / 2, bw, bh);
-  }
+
   vctx.globalAlpha = 1;
-  vizRaf = requestAnimationFrame(drawViz);
+  vctx.lineCap = "round";
+  for (let i = 0; i < BARS; i++){
+    let v, colour = tone;
+    if (phase === "thinking"){
+      // Nothing to listen to while it transcribes and answers, so this is the one synthesised state:
+      // two lobes travelling around the ring, same object, obviously busy.
+      v = 0.18 + 0.34 * Math.max(0, Math.sin((i / BARS) * Math.PI * 4 - t * 3.4));
+    } else if (phase === "asleep"){
+      v = 0.06 + 0.03 * Math.sin((i / BARS) * Math.PI * 6 + t * 0.9);
+    } else {
+      v = wave[i];
+      colour = waveWho[i] === "idle" ? pal.idle : (waveWho[i] === "you" ? pal.you : pal.mac);
+    }
+    const a = (i / BARS) * Math.PI * 2 - Math.PI / 2;
+    const r0 = R * breathe, r1 = r0 + 3 + v * reach;
+    vctx.beginPath();
+    vctx.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+    vctx.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+    vctx.strokeStyle = colour;
+    vctx.globalAlpha = phase === "asleep" ? 0.5 : (v < 0.02 ? 0.45 : 1);
+    vctx.lineWidth = Math.max(2, (Math.min(w, h) / BARS) * 0.9);
+    vctx.stroke();
+  }
+
+  // A quiet core that swells with whatever is currently making sound.
+  const loud = phase === "thinking" ? 0.3 : wave.slice(-8).reduce((a, b) => a + b, 0) / 8;
+  vctx.globalAlpha = 1;
+  vctx.beginPath();
+  vctx.arc(cx, cy, R * breathe - 7, 0, Math.PI * 2);
+  vctx.strokeStyle = tone; vctx.globalAlpha = 0.35 + loud * 0.5; vctx.lineWidth = 1.5; vctx.stroke();
+  vctx.globalAlpha = 1;
+
+  requestAnimationFrame(drawViz);
 }
-drawViz();
+requestAnimationFrame(drawViz);
 function fail(msg){ err.textContent = msg; err.hidden = false; }
 
 function addTurn(who, text, timing){

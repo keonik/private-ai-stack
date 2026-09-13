@@ -39,9 +39,19 @@ The browser sends 16 kHz mono WAV it encodes itself, so the server never has to 
 format. That removes the whole class of "every .webm upload 500s" failures, and 16 kHz is what every
 backend resamples to anyway.
 
-**Who has the floor** is shown as a rolling amplitude bar chart on a canvas: green while you speak,
-teal while the Mac answers, flat grey when neither. Your side comes from the RMS the voice detection
-already computes. The reply's side is **computed from the WAV bytes**, not from the audio graph.
+**Who has the floor** is one circular object with five states, borrowed from the AI SDK's Persona
+component: `asleep`, `listening`, `hearing`, `thinking`, `speaking`. Seventy-two bars radiate from a
+still centre, newest sound at the top, sweeping clockwise — so speech reads as a wave travelling around
+the ring rather than a meter jumping up and down. Green while you talk, teal while the Mac answers.
+
+The difference from Persona is that **four of the five states are driven by real amplitude**, not a
+canned animation. Only `thinking` has nothing to listen to, so only that one is synthesised: two lobes
+travelling around the same ring. That is deliberate — the loading state is the same object being busy,
+rather than a spinner appearing next to it. The gate's opening threshold is drawn as a faint dashed
+circle while listening, so it is visible when a quiet voice is not clearing it.
+
+Your side comes from the RMS the voice detection already computes. The reply's side is **computed from
+the WAV bytes**, not from the audio graph.
 
 That last choice is load-bearing on phones. The first version routed the reply through a
 `MediaElementSource` so an `AnalyserNode` could watch it, and on mobile that made the reply **silent
@@ -55,7 +65,9 @@ silence is played inside the tap that starts the conversation, which is what mar
 user-permitted so later replies can play themselves. If a browser still refuses, the page says so
 instead of appearing to work.
 
-`env_test.js` checks the parser against a real reply from the engine.
+`env_test.js` checks the parser against a real reply from the engine, and `viz_test.js` renders
+every state against a stub canvas to catch non-finite geometry and states that draw nothing — neither
+is visible from a terminal otherwise.
 
 **Conversation memory** is the last six turns, sent with each request. The server coerces every role to
 user or assistant and truncates each turn, because the client is untrusted and an unbounded history is
