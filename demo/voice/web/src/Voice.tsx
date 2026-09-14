@@ -13,7 +13,6 @@ import {
   VoiceSelector,
   VoiceSelectorContent,
   VoiceSelectorDescription,
-  VoiceSelectorDialog,
   VoiceSelectorEmpty,
   VoiceSelectorGender,
   VoiceSelectorGroup,
@@ -78,6 +77,7 @@ export default function Voice() {
   const [mic, setMic] = useState<string | undefined>(remembered("mic") ?? undefined);
   const [sensitivity, setSensitivity] = useState<Sensitivity>((remembered("sens") as Sensitivity) ?? "normal");
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [playhead, setPlayhead] = useState<{ id: number; t: number } | null>(null);
 
   const levels = useRef<number[]>(new Array(BARS).fill(0));
@@ -376,45 +376,51 @@ export default function Voice() {
               </MicSelectorContent>
             </MicSelector>
 
-            <VoiceSelector
-              onValueChange={(v) => {
-                if (!v) return;
-                setVoice(v);
-                remember("voice", v);
-              }}
-              value={voice}
-            >
+            <VoiceSelector onOpenChange={setVoiceOpen} open={voiceOpen} value={voice}>
               <VoiceSelectorTrigger asChild>
                 <Button size="sm" variant="outline">
                   Voice: {currentVoice?.label ?? "…"}
                 </Button>
               </VoiceSelectorTrigger>
-              <VoiceSelectorDialog>
-                <VoiceSelectorContent>
-                  <VoiceSelectorInput placeholder="Search voices…" />
-                  <VoiceSelectorList>
-                    <VoiceSelectorEmpty />
-                    {Object.entries(byLanguage).map(([language, group]) => (
-                      <VoiceSelectorGroup heading={language} key={language}>
-                        {group.map((v) => (
-                          <VoiceSelectorItem key={v.id} value={v.id}>
-                            <div className="flex flex-1 items-center gap-2">
-                              <VoiceSelectorName>{v.label}</VoiceSelectorName>
-                              <VoiceSelectorGender value={v.gender as "male" | "female"} />
-                              <VoiceSelectorDescription>{language}</VoiceSelectorDescription>
-                            </div>
-                            <VoiceSelectorPreview
-                              loading={previewing === v.id}
-                              onPlay={() => void previewVoice(v.id)}
-                              playing={false}
-                            />
-                          </VoiceSelectorItem>
-                        ))}
-                      </VoiceSelectorGroup>
-                    ))}
-                  </VoiceSelectorList>
-                </VoiceSelectorContent>
-              </VoiceSelectorDialog>
+              {/* VoiceSelector is itself the Dialog root, so the content goes straight inside it.
+                  Wrapping this in VoiceSelectorDialog nests a second dialog whose own open state stays
+                  false, and the palette silently never appears. */}
+              <VoiceSelectorContent>
+                <VoiceSelectorInput placeholder="Search 41 voices…" />
+                <VoiceSelectorList>
+                  <VoiceSelectorEmpty>No voice found.</VoiceSelectorEmpty>
+                  {Object.entries(byLanguage).map(([language, group]) => (
+                    <VoiceSelectorGroup heading={language} key={language}>
+                      {group.map((v) => (
+                        <VoiceSelectorItem
+                          key={v.id}
+                          onSelect={() => {
+                            setVoice(v.id);
+                            remember("voice", v.id);
+                            setVoiceOpen(false);
+                          }}
+                          // What the search box matches on; selection is handled above.
+                          value={`${v.label} ${language} ${v.gender}`}
+                        >
+                          <div className="flex flex-1 items-center gap-2">
+                            <VoiceSelectorName>{v.label}</VoiceSelectorName>
+                            <VoiceSelectorGender value={v.gender as "male" | "female"} />
+                            <VoiceSelectorDescription>{language}</VoiceSelectorDescription>
+                            {v.id === voice ? (
+                              <span className="font-mono text-[10px] text-primary uppercase">current</span>
+                            ) : null}
+                          </div>
+                          <VoiceSelectorPreview
+                            loading={previewing === v.id}
+                            onPlay={() => void previewVoice(v.id)}
+                            playing={false}
+                          />
+                        </VoiceSelectorItem>
+                      ))}
+                    </VoiceSelectorGroup>
+                  ))}
+                </VoiceSelectorList>
+              </VoiceSelectorContent>
             </VoiceSelector>
 
             <select

@@ -75,6 +75,13 @@ silence is played inside the tap that starts the conversation, which is what mar
 user-permitted so later replies can play themselves. If a browser still refuses, the page says so
 instead of appearing to work.
 
+`npm test` inside `web/` drives a real browser (Playwright) over the controls. Those tests exist because
+three bugs shipped that no terminal could see: a voice dialog that never opened, replies that were silent
+on phones, and a speech gate that only fired for a shout. The dialog one is worth keeping in mind —
+`VoiceSelector` **is** the dialog root, so nesting `VoiceSelectorDialog` inside it creates a second
+dialog whose open state stays false and the palette silently never appears. The test was confirmed to
+fail on that exact composition before being kept.
+
 `env_test.js` checks the parser against a real reply from the engine, and `viz_test.js` renders
 every state against a stub canvas to catch non-finite geometry and states that draw nothing — neither
 is visible from a terminal otherwise.

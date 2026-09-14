@@ -43,3 +43,5 @@ stack/observability/local-logs/*
 !stack/observability/local-logs/.gitkeep
 demo/voice/web/node_modules/
 demo/voice/static/
+demo/voice/web/test-results/
+demo/voice/web/playwright-report/
