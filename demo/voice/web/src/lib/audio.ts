@@ -3,11 +3,21 @@
 
 export const OUT_RATE = 16_000;
 export const BLOCK = 2048; // ~46 ms at 44.1 kHz: fine enough to catch a short word
-export const SILENCE_MS = 700; // pause that ends your turn
+export const SILENCE_MS = 700; // default pause that ends your turn; adjustable per conversation
 export const MIN_SPEECH_MS = 200; // shorter than this is a cough, not a sentence
 export const MAX_TURN_MS = 30_000; // a stuck gate must not upload minutes of audio
 export const PREROLL_MS = 400; // kept before speech is detected, so the first word survives
 const FLOOR_WIN = 40; // ~1.8 s of history behind the noise-floor estimate
+const BARGE_MS = 260; // talking over the reply takes a little more than starting a turn does
+const BARGE_MARGIN = 2.2; // how far above the reply's expected echo your voice has to be
+
+/**
+ * listen — normal: open a turn when you speak.
+ * paused — measure levels only; used while the reply plays when interrupting is off.
+ * barge  — the reply is playing and you may talk over it. The gate is told how loud the reply's own echo is
+ *          expected to be right now and only opens for sound clearly above that.
+ */
+export type GateMode = "listen" | "paused" | "barge";
 
 export type Sensitivity = "high" | "normal" | "low";
 
@@ -37,7 +47,9 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
   let prerollFrames = 0;
   let utterance: Float32Array[] = [];
   let utteranceFrames = 0;
-  let paused = false;
+  let mode: GateMode = "listen";
+  let silenceLimit = SILENCE_MS;
+  let echo: () => number = () => 0;
 
   const reset = () => {
     speaking = false;
@@ -53,8 +65,23 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
     },
     /** While the reply plays, keep measuring levels but never open a turn — it must not answer itself. */
     setPaused(p: boolean) {
-      paused = p;
-      if (p) reset();
+      this.setMode(p ? "paused" : "listen");
+    },
+    setMode(m: GateMode) {
+      if (m === mode) return;
+      // Never throw away a turn that is already open: in barge mode that is you, talking over the reply.
+      if (m === "paused" || !speaking) reset();
+      mode = m;
+    },
+    get mode() {
+      return mode;
+    },
+    setSilence(ms: number) {
+      silenceLimit = ms;
+    },
+    /** Expected echo of the reply at this instant, in the same units as the microphone's RMS. */
+    setEcho(fn: () => number) {
+      echo = fn;
     },
     get threshold() {
       return startT;
@@ -79,7 +106,9 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
       const keepT = noiseFloor * sens.keep + sens.abs * 0.5;
 
       onEvent({ type: "level", rms, normalised: rms / (noiseFloor * 9), speaking });
-      if (paused) return;
+      if (mode === "paused") return;
+      const barge = mode === "barge";
+      const openAt = barge ? startT + echo() * BARGE_MARGIN : startT;
 
       const copy = new Float32Array(buf);
       if (!speaking) {
@@ -89,9 +118,9 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
         while (prerollFrames > maxFrames) prerollFrames -= preroll.shift()!.length;
         // Decay rather than reset: speech is not continuous, and zeroing this on the first quiet block
         // meant only an uninterrupted shout could ever open the gate.
-        if (rms > startT) speechMs += ms;
+        if (rms > openAt) speechMs += ms;
         else speechMs = Math.max(0, speechMs - ms * 0.6);
-        if (speechMs >= MIN_SPEECH_MS) {
+        if (speechMs >= (barge ? BARGE_MS : MIN_SPEECH_MS)) {
           speaking = true;
           silenceMs = 0;
           utterance = preroll.slice();
@@ -105,9 +134,9 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
 
       utterance.push(copy);
       utteranceFrames += copy.length;
-      silenceMs = rms > keepT ? 0 : silenceMs + ms;
+      silenceMs = rms > keepT + (barge ? echo() * BARGE_MARGIN * 0.6 : 0) ? 0 : silenceMs + ms;
       const turnMs = (utteranceFrames / sampleRate) * 1000;
-      if (silenceMs >= SILENCE_MS || turnMs >= MAX_TURN_MS) {
+      if (silenceMs >= silenceLimit || turnMs >= MAX_TURN_MS) {
         const blocks = utterance;
         const frames = utteranceFrames;
         reset();
@@ -198,6 +227,20 @@ export function envelopeOf(buf: ArrayBuffer): { env: number[]; seconds: number }
     env.push(n ? Math.sqrt(sum / n) : 0);
   }
   return { env, seconds: samples.length / channels / rate };
+}
+
+/** Amplitude per ~46 ms from any decoded clip (the replies arrive as MP3, so they are decoded first). */
+export function envelopeOfBuffer(b: AudioBuffer): number[] {
+  const data = b.getChannelData(0);
+  const step = Math.max(1, Math.round(b.sampleRate * 0.046));
+  const env: number[] = [];
+  for (let i = 0; i < data.length; i += step) {
+    let sum = 0;
+    const end = Math.min(data.length, i + step);
+    for (let j = i; j < end; j++) sum += data[j] * data[j];
+    env.push(Math.sqrt(sum / Math.max(1, end - i)));
+  }
+  return env;
 }
 
 /** A moment of silence played inside a tap is what marks an element as user-permitted on iOS. */

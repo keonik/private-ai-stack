@@ -36,8 +36,8 @@ resetting** — the first version zeroed it on any quiet block, so only a contin
 open the gate, which is exactly how it failed in use.
 
 A turn ends after **700 ms** of quiet, anything under **200 ms** is a cough, a turn is cut at **30 s**,
-and the **400 ms** before speech was detected is kept so the first word survives. The microphone is
-gated off while the reply plays, so it never answers itself. The visualiser draws the opening threshold
+and the **400 ms** before speech was detected is kept so the first word survives. While the reply plays
+the gate either ignores the microphone or listens for you talking over it — see *The lab* below. The visualiser draws the opening threshold
 as a pair of faint lines, so it is visible when a voice simply is not clearing it.
 
 **Sensitivity** is a control on the page, because only the person in the room knows whether there is a
@@ -89,6 +89,66 @@ is visible from a terminal otherwise.
 **Conversation memory** is the last six turns, sent with each request. The server coerces every role to
 user or assistant and truncates each turn, because the client is untrusted and an unbounded history is
 a way to make someone else's GPU do free work.
+
+## The lab: latency, interrupting, fillers, engines
+
+Every idea for making the conversation feel faster is a switch on the page, so they can be tried by ear
+rather than argued about, and each turn adds a row to a latency table. A turn is **one request**,
+`/api/talk`, which transcribes, answers and speaks, streamed back as server-sent events.
+
+**How the reply is spoken.** *Whole* is the original: write the full answer, synthesise it, play it.
+*Sentence by sentence* cuts the answer as the model writes it. *Eager* (the default) lets the very first
+chunk end at a comma, so the voice starts on a clause while the rest is still being written. Kokoro,
+twelve turns each, seconds from the upload to the first sound:
+
+| | whole | sentence | eager |
+|---|---|---|---|
+| first sound, median | 2.61 | 2.26 | **1.75** |
+
+Two infrastructure fixes were worth more than any of that. **A kept-alive connection to the endpoint:**
+a fresh one per call paid a TLS handshake through the tunnel every time, and one sentence of speech went
+from 0.52 s to 0.20 s. **MP3 instead of WAV** for the reply: 21 KB a sentence instead of 154 KB, over two
+networks. With both, Kokoro in eager mode reaches first sound in **1.32 s** (whole: 2.10 s).
+
+**Synthesis is serial within a turn.** Sending every sentence to the engine at once looked parallel and
+was not: they queue on the same GPU as the model still writing. On Qwen3-TTS the first sentence took
+**5.5 s** instead of 1 s. One at a time, the first is never waiting behind the rest.
+
+**Talking over the reply** stops it within a block of audio (~46 ms), aborts the request so the server
+stops writing and speaking, and records only what was actually heard into the history, ending with a
+dash. The hard part is the Mac's own voice coming back into the microphone. The reply's loudness is
+known at every instant (it is decoded to draw the ring), so the gate is told how much echo to expect
+right now and only opens for sound clearly above it — **2.2×** the expected echo, held for **260 ms**. How
+much echo this room returns is learned while the reply plays and you are quiet, and shown on the page.
+If you pause mid-thought and carry on before any of the answer has played, that is not an interruption:
+what you said is carried into the next turn and answered as one question.
+
+**Fillers** — "Hmm, let me think.", "Okay, so.", "Right.", "Good question.", "Let's see." — are synthesised
+once per voice when the conversation starts and played only if no reply audio has arrived **600 ms** after
+your turn ended (or 250 ms for a quick acknowledgement). Humans leave about 200 ms between turns;
+published guidance puts the point where a filler is needed at 500-800 ms. On a fast turn you never hear
+one.
+
+**Speech engines.** All served by the same oMLX process. Three sentences per voice, each transcribed
+back with Parakeet to catch a voice that mumbles; first sound is eager mode through the whole pipeline:
+
+| engine | a sentence alone | first sound in a turn | word errors | licence |
+|---|---|---|---|---|
+| Kokoro 82M | 0.12-0.20 s | 1.32 s | 0% | Apache-2.0 |
+| Pocket TTS (Kyutai) | 0.20-0.32 s | 1.59 s | 0-8% | CC-BY-4.0 |
+| Chatterbox Turbo (Resemble) | 0.55 s | 1.92 s | 0% | MIT, inaudible watermark |
+| VibeVoice Realtime (Microsoft) | 0.46-0.66 s | 1.97 s | 0-7% | MIT |
+| Qwen3-TTS 0.6B | 0.8-1.2 s | 2.15 s | 0-10% | Apache-2.0 |
+| Qwen3-TTS 1.7B | 0.9-1.1 s | 2.52 s | 0-7% | Apache-2.0 |
+
+Left out: Qwen3-TTS *ryan* (97-114 words a minute, 13-15% errors) and *dylan* on the 1.7B (31%). Voxtral
+TTS is non-commercial, oMLX does not serve Orpheus, and CSM needs gated access. The gateway rejects a
+speech request with no `voice` at all, so Chatterbox, which has one built-in voice, is still sent a name.
+
+`tests/conversation.spec.ts` runs whole conversations in Chromium with a **fake microphone playing a
+recorded voice**: a plain turn, talking over a story until it stops and answers the new question, and
+the slowest engine with fillers on. There is no room echo in a headless browser, so those prove the logic
+of interrupting, not how it behaves on a laptop speaker — that part needs a person.
 
 ## Run it
 

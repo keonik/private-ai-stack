@@ -77,6 +77,22 @@ model_list:
   - model_name: kokoro-tts
     litellm_params: { model: openai/kokoro-tts, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: audio_speech }
+  # More realistic, slower voices, A/B-tested against Kokoro in demo/voice. All served by oMLX's bundled mlx-audio.
+  - model_name: qwen3-tts-0.6b
+    litellm_params: { model: openai/qwen3-tts-0.6b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: qwen3-tts-1.7b
+    litellm_params: { model: openai/qwen3-tts-1.7b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: chatterbox-turbo
+    litellm_params: { model: openai/chatterbox-turbo, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: pocket-tts
+    litellm_params: { model: openai/pocket-tts, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
+  - model_name: vibevoice-realtime
+    litellm_params: { model: openai/vibevoice-realtime, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    model_info: { mode: audio_speech }
   - model_name: whisper-turbo
     litellm_params: { model: openai/whisper-turbo, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: audio_transcription }

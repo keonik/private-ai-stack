@@ -17,7 +17,11 @@ Environment:
 """
 from __future__ import annotations
 
+import asyncio
+import base64
+import json
 import os
+import re
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -95,6 +99,34 @@ VOICES = [
 DEFAULT_VOICE = "af_heart"
 
 
+SYSTEM_PROMPT = (
+    "You are a voice assistant running on a Mac in someone's office. You are being spoken to out "
+    "loud and your reply is read aloud, so answer in at most three sentences, plainly, with no "
+    "lists and no markdown.\n"
+    # Without this paragraph it offers to play soothing sounds and short stories, then plays
+    # nothing, because speaking is the only thing it can actually do.
+    "Talking is the only thing you can do. You cannot play music, sounds or recordings, set "
+    "timers or reminders, send anything, search the web, open files, or control this computer. "
+    "Never offer to do any of those, and never say you are about to play something. If someone "
+    "asks for a story, a calming exercise or a joke, simply say it yourself, now, in your reply. "
+    "If they ask for something you genuinely cannot do, say so in one sentence and offer what you "
+    "can.\n"
+    "If you are interrupted, the last assistant turn ends where the person cut you off; carry on "
+    "from what they said, do not repeat yourself.\n"
+    "If asked what you are, say you are an open-weight model running locally.")
+
+
+def clean_history(raw) -> list[dict]:
+    """The client is untrusted: last six turns, roles coerced, each capped."""
+    out = []
+    for turn in (raw or [])[-6:]:
+        role = "assistant" if turn.get("role") == "assistant" else "user"
+        content = str(turn.get("content") or "").strip()[:MAX_TEXT]
+        if content:
+            out.append({"role": role, "content": content})
+    return out
+
+
 def voice_catalogue() -> list[dict]:
     """Grouped for a picker: language from the first letter, gender from the second."""
     out = []
@@ -102,6 +134,76 @@ def voice_catalogue() -> list[dict]:
         lang, gender = VOICE_LANGS.get(v[0], "Other"), "female" if v[1] == "f" else "male"
         out.append({"id": v, "label": v.split("_", 1)[1].title(), "language": lang, "gender": gender})
     return out
+
+
+# Speech engines offered in the lab, all served by the same oMLX process. Measured on the reference machine
+# 2026-09-14, three sentences per voice, each transcribed back with Parakeet to catch a voice that mumbles:
+#
+#   kokoro-tts          0.12-0.20 s a sentence   0% word errors    Apache-2.0
+#   pocket-tts          0.20-0.32 s              0-8%              CC-BY-4.0, credit Kyutai
+#   vibevoice-realtime  0.46-0.66 s              0-7%              MIT
+#   chatterbox-turbo    0.55 s                   0%                MIT, adds an inaudible watermark
+#   qwen3-tts-0.6b      0.8-1.2 s                0-10%             Apache-2.0
+#   qwen3-tts-1.7b      0.9-1.1 s                0-7%              Apache-2.0
+#
+# Left out: Qwen3-TTS "ryan" on both sizes (97-114 words a minute and 13-15% word errors) and "dylan" on the
+# 1.7B (31%). Voxtral TTS is non-commercial; Orpheus is not served by this engine; CSM needs gated access.
+def _v(id_: str, label: str, language: str, gender: str) -> dict:
+    return {"id": id_, "label": label, "language": language, "gender": gender}
+
+
+_QWEN = [("vivian", "Vivian", "Chinese", "female"), ("serena", "Serena", "Chinese", "female"),
+         ("uncle_fu", "Uncle Fu", "Chinese", "male"), ("eric", "Eric", "Chinese", "male"),
+         ("dylan", "Dylan", "Chinese", "male"), ("aiden", "Aiden", "English", "male"),
+         ("ono_anna", "Ono Anna", "Japanese", "female"), ("sohee", "Sohee", "Korean", "female")]
+_VIBE_LANG = {"en": "English", "in": "Indian English", "de": "German", "fr": "French", "it": "Italian",
+              "jp": "Japanese", "kr": "Korean", "nl": "Dutch", "pl": "Polish", "pt": "Portuguese", "sp": "Spanish"}
+_VIBE = ["en-Carter_man", "en-Davis_man", "en-Emma_woman", "en-Frank_man", "en-Grace_woman", "en-Mike_man",
+         "in-Samuel_man", "de-Spk0_man", "de-Spk1_woman", "fr-Spk0_man", "fr-Spk1_woman", "it-Spk0_woman",
+         "it-Spk1_man", "jp-Spk0_man", "jp-Spk1_woman", "kr-Spk0_woman", "kr-Spk1_man", "nl-Spk0_man",
+         "nl-Spk1_woman", "pl-Spk0_man", "pl-Spk1_woman", "pt-Spk0_woman", "pt-Spk1_man", "sp-Spk0_woman",
+         "sp-Spk1_man"]
+
+
+def _vibe(v: str) -> dict:
+    lang, rest = v.split("-", 1)
+    name, gender = rest.rsplit("_", 1)
+    label = name if not name.startswith("Spk") else f"Speaker {int(name[3:]) + 1}"
+    return _v(v, label, _VIBE_LANG.get(lang, lang), "female" if gender == "woman" else "male")
+
+
+TTS_ENGINES = [
+    {"id": "kokoro-tts", "label": "Kokoro 82M", "note": "fastest, ~0.15 s a sentence", "default": "af_heart",
+     "voices": voice_catalogue()},
+    {"id": "pocket-tts", "label": "Pocket TTS · Kyutai", "note": "~0.25 s a sentence", "default": "alba",
+     "voices": [_v(n, n.title(), "English", g) for n, g in (
+         ("alba", "female"), ("azelma", "female"), ("cosette", "female"), ("eponine", "female"),
+         ("fantine", "female"), ("javert", "male"), ("jean", "male"), ("marius", "male"))]},
+    {"id": "vibevoice-realtime", "label": "VibeVoice Realtime · Microsoft", "note": "~0.55 s a sentence",
+     "default": "en-Emma_woman", "voices": [_vibe(v) for v in _VIBE]},
+    {"id": "chatterbox-turbo", "label": "Chatterbox Turbo · Resemble", "note": "expressive, ~0.55 s",
+     "default": "default", "voices": [_v("default", "Default", "English", "female")]},
+    {"id": "qwen3-tts-1.7b", "label": "Qwen3-TTS 1.7B", "note": "~1 s a sentence", "default": "vivian",
+     "voices": [_v(*q) for q in _QWEN if q[0] != "dylan"]},
+    {"id": "qwen3-tts-0.6b", "label": "Qwen3-TTS 0.6B", "note": "~1 s a sentence", "default": "vivian",
+     "voices": [_v(*q) for q in _QWEN]},
+]
+ENGINE_BY_ID = {e["id"]: e for e in TTS_ENGINES}
+
+
+def pick_voice(engine: str | None, voice: str | None) -> tuple[str, str]:
+    """A known engine and one of its voices, or a 400 — the engine answers unknown voices with a 500 and a path."""
+    eng = ENGINE_BY_ID.get(engine or "") or ENGINE_BY_ID[TTS_MODEL if TTS_MODEL in ENGINE_BY_ID else "kokoro-tts"]
+    voice = voice or eng["default"]
+    if voice not in {v["id"] for v in eng["voices"]}:
+        raise HTTPException(400, "That voice is not available.")
+    return eng["id"], voice
+
+
+def speech_body(engine: str, voice: str, text: str, fmt: str) -> dict:
+    # Chatterbox has one built-in voice and ignores the name, but the gateway rejects a speech request that
+    # has no voice at all ("Router.aspeech() missing 1 required positional argument"), so always send one.
+    return {"model": engine, "input": text, "response_format": fmt, "voice": voice}
 
 
 _hits: dict[str, deque] = defaultdict(deque)
@@ -123,8 +225,8 @@ def pass_holder(request: Request) -> str | None:
     return None
 
 
-def guard(request: Request) -> None:
-    """Cheap protection for a public page pointed at someone's GPU."""
+def guard(request: Request, cost: int = 1) -> None:
+    """Cheap protection for a public page pointed at someone's GPU. `cost` is how many requests this counts as."""
     if not ENABLED:
         raise HTTPException(503, "The demo is switched off right now.")
     if not BASE or not KEY:
@@ -135,7 +237,7 @@ def guard(request: Request) -> None:
         _day[0], _day[1] = today, 0
     if _day[1] >= DAILY_BUDGET and not holder:
         raise HTTPException(429, "The demo has used its budget for today. It resets at midnight UTC.")
-    _day[1] += 1
+    _day[1] += cost
 
     ip = (request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
           or (request.client.host if request.client else "?")).strip()
@@ -146,15 +248,31 @@ def guard(request: Request) -> None:
     q = _hits[bucket]
     while q and now - q[0] > window:
         q.popleft()
-    if len(q) >= limit:
+    if len(q) + cost > limit:
         raise HTTPException(429, "That is a lot of requests. Give it a minute.")
-    q.append(now)
+    q.extend([now] * cost)
+
+
+_client: httpx.AsyncClient | None = None
+
+
+def client() -> httpx.AsyncClient:
+    """One long-lived connection pool to the endpoint.
+
+    A fresh client per call paid a TLS handshake through the tunnel every time: measured 0.52 s median for
+    one sentence of speech that way, against 0.20 s on a kept-alive connection. Most of a voice turn's
+    budget was being spent saying hello.
+    """
+    global _client
+    if _client is None:
+        _client = httpx.AsyncClient(timeout=120, headers={"Authorization": f"Bearer {KEY}",
+                                                          "User-Agent": "voice-demo/1.0"},
+                                    limits=httpx.Limits(max_keepalive_connections=16, keepalive_expiry=300))
+    return _client
 
 
 async def upstream(method: str, path: str, **kw) -> httpx.Response:
-    headers = {"Authorization": f"Bearer {KEY}", "User-Agent": "voice-demo/1.0"}
-    async with httpx.AsyncClient(timeout=120) as c:
-        r = await c.request(method, f"{BASE}{path}", headers=headers, **kw)
+    r = await client().request(method, f"{BASE}{path}", **kw)
     if r.status_code >= 400:
         raise HTTPException(502, f"The inference endpoint returned {r.status_code}.")
     return r
@@ -215,25 +333,23 @@ def health() -> JSONResponse:
 
 
 PREVIEW_TEXT = "This is how I sound."
-_previews: dict[str, bytes] = {}
+_previews: dict[tuple[str, str], bytes] = {}
 
 
 @app.get("/api/preview")
-async def preview(request: Request, voice: str = Query(...)) -> Response:
+async def preview(request: Request, voice: str = Query(...), engine: str = Query("kokoro-tts")) -> Response:
     """The same sentence in every voice, synthesised once and then served from memory.
 
     Previews were most of the traffic that tripped the rate limit — 27 of 44 speech requests in one
     tester's session — while costing the GPU the same work every time for a sentence that never changes.
     A cached preview is not rate-limited: it touches nothing but this process's memory.
     """
-    if voice not in VOICES:
-        raise HTTPException(400, "That voice is not available.")
-    if voice not in _previews:
+    engine, voice = pick_voice(engine, voice)
+    if (engine, voice) not in _previews:
         guard(request)
-        r = await upstream("POST", "/audio/speech", json={"model": TTS_MODEL, "input": PREVIEW_TEXT,
-                                                          "voice": voice, "response_format": "wav"})
-        _previews[voice] = r.content
-    return Response(_previews[voice], media_type="audio/wav",
+        r = await upstream("POST", "/audio/speech", json=speech_body(engine, voice, PREVIEW_TEXT, "mp3"))
+        _previews[(engine, voice)] = r.content
+    return Response(_previews[(engine, voice)], media_type="audio/mpeg",
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
@@ -252,8 +368,15 @@ def models() -> JSONResponse:
 
 
 @app.get("/api/voices")
-def voices() -> JSONResponse:
-    return JSONResponse({"default": DEFAULT_VOICE, "voices": voice_catalogue()})
+def voices(engine: str = Query("kokoro-tts")) -> JSONResponse:
+    eng = ENGINE_BY_ID.get(engine) or ENGINE_BY_ID["kokoro-tts"]
+    return JSONResponse({"engine": eng["id"], "default": eng["default"], "voices": eng["voices"]})
+
+
+@app.get("/api/engines")
+def engines() -> JSONResponse:
+    return JSONResponse({"default": "kokoro-tts",
+                         "engines": [{k: e[k] for k in ("id", "label", "note", "default")} for e in TTS_ENGINES]})
 
 
 @app.post("/api/transcribe")
@@ -289,30 +412,13 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
         raise HTTPException(400, "Nothing to answer.")
     # A spoken conversation needs the last few turns or every answer restarts from nothing. Capped hard:
     # the client is untrusted, and an unbounded history is a way to make someone else's GPU do free work.
-    history = []
-    for turn in (payload.get("history") or [])[-6:]:
-        role = "assistant" if turn.get("role") == "assistant" else "user"
-        content = str(turn.get("content") or "").strip()[:MAX_TEXT]
-        if content:
-            history.append({"role": role, "content": content})
+    history = clean_history(payload.get("history"))
     choice = CHAT_BY_ID.get(payload.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
     t0 = time.time()
     r = await upstream("POST", "/chat/completions", json={
         "model": choice["id"], "max_tokens": 220, "temperature": 0.4, **choice["extra"],
         "messages": [
-            {"role": "system", "content":
-                "You are a voice assistant running on a Mac in someone's office. You are being spoken to out "
-                "loud and your reply is read aloud, so answer in at most three sentences, plainly, with no "
-                "lists and no markdown.\n"
-                # Without this paragraph it offers to play soothing sounds and short stories, then plays
-                # nothing, because speaking is the only thing it can actually do.
-                "Talking is the only thing you can do. You cannot play music, sounds or recordings, set "
-                "timers or reminders, send anything, search the web, open files, or control this computer. "
-                "Never offer to do any of those, and never say you are about to play something. If someone "
-                "asks for a story, a calming exercise or a joke, simply say it yourself, now, in your reply. "
-                "If they ask for something you genuinely cannot do, say so in one sentence and offer what you "
-                "can.\n"
-                "If asked what you are, say you are an open-weight model running locally."},
+            {"role": "system", "content": SYSTEM_PROMPT},
             *history,
             {"role": "user", "content": text}]})
     took = time.time() - t0
@@ -339,3 +445,226 @@ async def speak(request: Request, payload: dict) -> Response:
                                                       "voice": voice, "response_format": "wav"})
     return Response(r.content, media_type="audio/wav",
                     headers={"X-Synthesis-Seconds": str(round(time.time() - t0, 2))})
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Fillers: a few short phrases per voice, synthesised once and served from memory like the previews. The
+# page plays one only when the real answer is slow to start, so on a fast turn you never hear one.
+FILLERS = ["Hmm, let me think.", "Okay, so.", "Right.", "Good question.", "Let's see."]
+_fillers: dict[tuple[str, str, int], bytes] = {}
+
+
+@app.get("/api/fillers")
+def fillers() -> JSONResponse:
+    return JSONResponse({"fillers": FILLERS})
+
+
+@app.get("/api/filler")
+async def filler(request: Request, voice: str = Query(...), i: int = Query(0),
+                 engine: str = Query("kokoro-tts")) -> Response:
+    if not 0 <= i < len(FILLERS):
+        raise HTTPException(400, "No such filler.")
+    engine, voice = pick_voice(engine, voice)
+    if (engine, voice, i) not in _fillers:
+        guard(request)
+        r = await upstream("POST", "/audio/speech", json=speech_body(engine, voice, FILLERS[i], "mp3"))
+        _fillers[(engine, voice, i)] = r.content
+    return Response(_fillers[(engine, voice, i)], media_type="audio/mpeg",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+# ---------------------------------------------------------------------------------------------------------
+# One request per turn: transcribe, answer, speak, streamed back as server-sent events.
+#
+# In "stream" mode the answer is cut into sentences as the model writes it and each sentence goes to speech
+# the moment it is complete, so the first sentence is playing while the third is still being written. In
+# "whole" mode the answer is written in full and spoken in one go — the original behaviour, kept so the two
+# can be compared on the same code path. Measured through the public endpoint on a warm model: the first
+# sentence of a three-sentence answer is written after ~0.6 s and spoken in ~0.4 s, against 1.9 s for the
+# whole answer plus 0.7 s to speak it.
+
+SENTENCE_END = re.compile(r'([.!?]["\')\]]?)\s+')
+MIN_CHUNK = 14       # "Sure." on its own is a clipped, odd-sounding clip; fold it into the next sentence
+EAGER_MIN = 24       # an eager first clause must still be long enough to carry some intonation
+LONG_CHUNK = 160     # a run-on sentence still gets cut at a comma rather than waiting for its full stop
+
+
+def take_sentences(buf: str, final: bool = False, eager: bool = False) -> tuple[list[str], str]:
+    """Pull finished sentences off the front of `buf`. `eager` lets the very first chunk end at a comma, so
+    the voice can start on a clause while the rest of the sentence is still being written."""
+    out = []
+    while True:
+        if eager and not out and ", " in buf[EAGER_MIN:]:
+            cut = buf.index(", ", EAGER_MIN) + 1
+            out.append(buf[:cut].strip())
+            buf = buf[cut:].lstrip()
+            eager = False
+            continue
+        # A full stop only ends a sentence if what follows does not start lower-case: that keeps "e.g. a
+        # small one" and '"Really?" she asked' whole. Until the next word arrives, it waits.
+        m = next((m for m in SENTENCE_END.finditer(buf)
+                  if m.end(1) >= MIN_CHUNK and m.end() < len(buf) and not buf[m.end()].islower()), None)
+        if m:
+            out.append(buf[:m.end(1)].strip())
+            buf = buf[m.end():]
+            continue
+        if len(buf) > LONG_CHUNK and ", " in buf[40:LONG_CHUNK]:
+            cut = buf.rindex(", ", 40, LONG_CHUNK) + 1
+            out.append(buf[:cut].strip())
+            buf = buf[cut:].lstrip()
+            continue
+        break
+    if final and buf.strip():
+        out.append(buf.strip())
+        buf = ""
+    return out, buf
+
+
+def speakable(text: str) -> str:
+    """The prompt says no markdown; the model does not always listen, and Kokoro reads asterisks aloud."""
+    return re.sub(r"[*_#`]+", "", text).strip()
+
+
+def sse(kind: str, **data) -> bytes:
+    return f"data: {json.dumps({'type': kind, **data})}\n\n".encode()
+
+
+@app.post("/api/talk")
+async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
+    from fastapi.responses import StreamingResponse
+
+    guard(request, cost=3)  # the same GPU work as the three separate calls it replaces
+    blob = await audio.read()
+    if len(blob) > MAX_AUDIO_BYTES:
+        raise HTTPException(413, "That clip is too long for the demo. Keep it under about two minutes.")
+    try:
+        opts = json.loads(meta)
+    except ValueError:
+        opts = {}
+    engine, voice = pick_voice(opts.get("engine"), opts.get("voice"))
+    choice = CHAT_BY_ID.get(opts.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
+    mode = {"whole": "whole", "eager": "eager"}.get(opts.get("mode"), "stream")
+    history = clean_history(opts.get("history"))
+    # Speech from a turn that was cut off before it was answered, so "what is the tallest… (pause) …
+    # mountain in Ohio" is answered as one question rather than two.
+    carry = str(opts.get("carry") or "").strip()[:MAX_TEXT]
+    seconds = float(opts.get("seconds") or 0)
+    async def events():
+        t0 = time.time()
+        since = lambda: round(time.time() - t0, 3)
+        http = client()
+        tasks: list[asyncio.Task] = []
+        try:
+            r = await http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
+                                  files={"file": ("clip.wav", blob, "audio/wav")})
+            if r.status_code >= 400:
+                yield sse("error", detail=f"Transcription failed ({r.status_code}).")
+                return
+            d = r.json()
+            heard = (d.get("text") or "").strip()
+            segments = [{"text": (g.get("text") or "").strip(), "startSecond": float(g.get("start") or 0),
+                         "endSecond": float(g.get("end") or 0)}
+                        for g in (d.get("segments") or []) if (g.get("text") or "").strip()]
+            stt = since()
+            yield sse("heard", text=heard, segments=segments, at=stt,
+                      realtime=round(seconds / stt, 1) if seconds and stt else None, model=STT_MODEL)
+            if not heard:
+                yield sse("done", at=since())
+                return
+            question = f"{carry} {heard}".strip()[:MAX_TEXT]
+
+            out: asyncio.Queue = asyncio.Queue()
+            spoken: asyncio.Queue = asyncio.Queue()
+
+            # One sentence at a time. Sending all of them at once looked parallel and was not: they queue on
+            # the same GPU as the model still writing, and on the heavier engines the first sentence took 5.5 s
+            # instead of 1 s because it was competing with the second and third.
+            last: list[asyncio.Task | None] = [None]
+
+            async def synth(text: str, before: asyncio.Task | None) -> tuple[bytes, float]:
+                if before is not None:
+                    await asyncio.gather(before, return_exceptions=True)
+                s0 = time.time()
+                # MP3, not WAV: a sentence is 21 KB instead of 154 KB, and it crosses two networks to get here.
+                rr = await http.post(f"{BASE}/audio/speech", json=speech_body(engine, voice, speakable(text), "mp3"))
+                rr.raise_for_status()
+                return rr.content, round(time.time() - s0, 3)
+
+            async def write() -> None:
+                """Read the model's stream, hand each finished sentence to speech straight away."""
+                buf, full, n = "", "", 0
+                body = {"model": choice["id"], "max_tokens": 220, "temperature": 0.4, "stream": True,
+                        **choice["extra"],
+                        "messages": [{"role": "system", "content": SYSTEM_PROMPT}, *history,
+                                     {"role": "user", "content": question}]}
+                try:
+                    async with http.stream("POST", f"{BASE}/chat/completions", json=body) as resp:
+                        if resp.status_code >= 400:
+                            await out.put(sse("error", detail=f"The model returned {resp.status_code}."))
+                            return
+                        first = True
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data:") or line.strip() == "data: [DONE]":
+                                continue
+                            try:
+                                delta = (json.loads(line[5:])["choices"] or [{}])[0].get("delta") or {}
+                            except (ValueError, KeyError, IndexError):
+                                continue
+                            piece = delta.get("content") or ""  # never reasoning_content
+                            if not piece:
+                                continue
+                            if first:
+                                await out.put(sse("first_token", at=since()))
+                                first = False
+                            buf += piece
+                            full += piece
+                            if mode != "whole":
+                                ready, buf = take_sentences(buf, eager=mode == "eager" and n == 0)
+                                for sentence in ready:
+                                    await out.put(sse("sentence", i=n, text=sentence, at=since()))
+                                    last[0] = asyncio.create_task(synth(sentence, last[0]))
+                                    tasks.append(last[0])
+                                    await spoken.put((n, sentence, last[0]))
+                                    n += 1
+                    if mode != "whole":
+                        ready, _ = take_sentences(buf, final=True)
+                    else:
+                        ready = [full.strip()] if full.strip() else []
+                    for sentence in ready:
+                        await out.put(sse("sentence", i=n, text=sentence, at=since()))
+                        last[0] = asyncio.create_task(synth(sentence, last[0]))
+                        tasks.append(last[0])
+                        await spoken.put((n, sentence, last[0]))
+                        n += 1
+                    if not full.strip():
+                        await out.put(sse("error", detail="That model spent its budget thinking and said nothing."))
+                    await out.put(sse("written", text=full.strip(), at=since(), model=choice["id"]))
+                finally:
+                    await spoken.put(None)
+
+            async def say() -> None:
+                """Emit the audio strictly in order, however the syntheses finish."""
+                try:
+                    while (item := await spoken.get()) is not None:
+                        i, sentence, task = item
+                        try:
+                            wav, took = await task
+                        except Exception:
+                            await out.put(sse("error", detail="Speech synthesis failed for one sentence."))
+                            continue
+                        await out.put(sse("audio", i=i, mp3=base64.b64encode(wav).decode(), synth=took,
+                                          at=since()))
+                finally:
+                    await out.put(None)
+
+            tasks += [asyncio.create_task(write()), asyncio.create_task(say())]
+            while (event := await out.get()) is not None:
+                yield event
+            yield sse("done", at=since(), mode=mode, engine=engine)
+        finally:
+            # The page aborts this request when you talk over the answer; stop writing and speaking then too.
+            for t in tasks:
+                t.cancel()
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
