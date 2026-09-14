@@ -23,7 +23,7 @@ from collections import defaultdict, deque
 from pathlib import Path
 
 import httpx
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -65,7 +65,16 @@ ENABLED = os.environ.get("DEMO_ENABLED", "1") != "0"
 
 MAX_AUDIO_BYTES = 4 * 1024 * 1024   # ~2 minutes of 16 kHz mono WAV
 MAX_TEXT = 400
-PER_IP = (20, 300)                   # 20 requests per 5 minutes per address
+# A conversation turn costs three requests, so the old 20 allowed about six turns per five minutes —
+# and a tester clicking through voice previews hit it long before that.
+PER_IP = (45, 300)                   # 45 requests per 5 minutes per address
+PASS_LIMIT = (300, 300)              # per pass holder: generous, but a leaked link still cannot run the GPU flat out
+
+# Tester passes: DEMO_PASSES="gray:<token>,friend:<token>". A pass lifts the per-address limit and the
+# daily budget for whoever holds the link. Tokens live only in the deployment's environment.
+PASSES = {tok.strip(): name.strip()
+          for name, _, tok in (pair.partition(":") for pair in os.environ.get("DEMO_PASSES", "").split(","))
+          if name.strip() and tok.strip()}
 
 # Kokoro ships 54 voice files; 41 of them synthesise on this engine. Every Japanese (jf_/jm_) and
 # Chinese (zf_/zm_) voice returns 500 — those need misaki's ja/zh phonemizers, which the engine's
@@ -102,23 +111,39 @@ app = FastAPI(title="voice demo", docs_url=None, redoc_url=None)
 STATIC = Path(__file__).parent / "static"
 
 
+def pass_holder(request: Request) -> str | None:
+    """The name behind a valid tester pass, compared in constant time so a token cannot be guessed by timing."""
+    import hmac
+    offered = request.headers.get("x-demo-pass", "")
+    if not offered:
+        return None
+    for token, name in PASSES.items():
+        if hmac.compare_digest(offered.encode(), token.encode()):
+            return name
+    return None
+
+
 def guard(request: Request) -> None:
     """Cheap protection for a public page pointed at someone's GPU."""
     if not ENABLED:
         raise HTTPException(503, "The demo is switched off right now.")
     if not BASE or not KEY:
         raise HTTPException(500, "The demo is not configured with an inference endpoint.")
+    holder = pass_holder(request)
     today = time.strftime("%Y-%m-%d", time.gmtime())
     if _day[0] != today:
         _day[0], _day[1] = today, 0
-    if _day[1] >= DAILY_BUDGET:
+    if _day[1] >= DAILY_BUDGET and not holder:
         raise HTTPException(429, "The demo has used its budget for today. It resets at midnight UTC.")
     _day[1] += 1
 
     ip = (request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
           or (request.client.host if request.client else "?")).strip()
-    now, (limit, window) = time.time(), PER_IP
-    q = _hits[ip]
+    # A pass holder is counted by name, not address, so moving from wifi to a phone does not reset them
+    # and two testers behind the same office NAT do not share a bucket.
+    bucket, (limit, window) = (f"pass:{holder}", PASS_LIMIT) if holder else (ip, PER_IP)
+    now = time.time()
+    q = _hits[bucket]
     while q and now - q[0] > window:
         q.popleft()
     if len(q) >= limit:
@@ -187,6 +212,36 @@ def health() -> JSONResponse:
     return JSONResponse({"ok": True, "enabled": ENABLED, "configured": bool(BASE and KEY),
                          "served_today": _day[1], "budget": DAILY_BUDGET,
                          "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
+
+
+PREVIEW_TEXT = "This is how I sound."
+_previews: dict[str, bytes] = {}
+
+
+@app.get("/api/preview")
+async def preview(request: Request, voice: str = Query(...)) -> Response:
+    """The same sentence in every voice, synthesised once and then served from memory.
+
+    Previews were most of the traffic that tripped the rate limit — 27 of 44 speech requests in one
+    tester's session — while costing the GPU the same work every time for a sentence that never changes.
+    A cached preview is not rate-limited: it touches nothing but this process's memory.
+    """
+    if voice not in VOICES:
+        raise HTTPException(400, "That voice is not available.")
+    if voice not in _previews:
+        guard(request)
+        r = await upstream("POST", "/audio/speech", json={"model": TTS_MODEL, "input": PREVIEW_TEXT,
+                                                          "voice": voice, "response_format": "wav"})
+        _previews[voice] = r.content
+    return Response(_previews[voice], media_type="audio/wav",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/whoami")
+def whoami(request: Request) -> JSONResponse:
+    holder = pass_holder(request)
+    limit, window = PASS_LIMIT if holder else PER_IP
+    return JSONResponse({"pass": holder, "limit": limit, "window_seconds": window})
 
 
 @app.get("/api/models")

@@ -157,10 +157,30 @@ on the machine holding the models if the engine's packages change.
 
 ## Guards, because this points at someone's GPU
 
-Twenty requests per five minutes per address, a four megabyte upload ceiling (about two minutes of
-audio), four hundred characters of text into the chat and speech steps, a daily budget, and a kill
-switch. Give it its own API key on the endpoint so it can be rate-limited and revoked without touching
-anything else.
+| who | limit |
+|---|---|
+| anyone | **45 requests per 5 minutes** per address, 2,000 per UTC day across everyone |
+| tester pass | **300 per 5 minutes**, counted per pass rather than per address, and exempt from the daily budget |
+
+A conversation turn is three requests: transcribe, answer, speak. The original per-address limit was 20,
+about six turns — and one tester's session showed why it was wrong: **44 speech requests against 17
+answers**, because clicking through the voice picker spent a request per preview.
+
+**Voice previews are cached.** Every voice says the same sentence, so it is synthesised once and then
+served from memory — 6 s cold, 1.7 ms after. A cached preview is not rate-limited at all.
+
+**Tester passes** are for people you want to hand the demo to without them running into the limit.
+`DEMO_PASSES="alice:<token>,bob:<token>"` in the deployment's environment; give someone
+`https://…/?pass=<token>`. The page keeps the pass in that browser, **strips it from the address bar**
+immediately so it does not end up in a screenshot, and sends it as `X-Demo-Pass`. Tokens are compared in
+constant time, a pass holder is bucketed by name so switching from wifi to a phone does not reset them,
+and a pass is deliberately not unlimited: a leaked link can use the demo heavily, but it cannot run the
+GPU flat out. Revoke one by removing it from the variable and redeploying. `/api/whoami` reports which
+tier a request is on.
+
+Beyond those: a four megabyte upload ceiling (about two minutes of audio), four hundred characters of
+text into the chat and speech steps, and a kill switch (`DEMO_ENABLED=0`). Give the demo its own API key
+on the endpoint so it can be rate-limited and revoked without touching anything else.
 
 ## Why it keeps itself warm
 

@@ -64,6 +64,23 @@ const remember = (k: string, v: string) => {
   }
 };
 
+// A tester pass arrives once as ?pass=… in a link, is kept in this browser, and is removed from the
+// address bar straight away so it does not end up in a screenshot or a shared URL.
+const PASS = (() => {
+  const url = new URL(window.location.href);
+  const fromLink = url.searchParams.get("pass");
+  if (fromLink) {
+    remember("pass", fromLink);
+    url.searchParams.delete("pass");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }
+  return fromLink ?? remembered("pass") ?? "";
+})();
+
+// Every API call carries the pass if there is one; nothing else about the request changes.
+const api = (input: string, init: RequestInit = {}) =>
+  fetch(input, { ...init, headers: { ...(init.headers ?? {}), ...(PASS ? { "x-demo-pass": PASS } : {}) } });
+
 export default function Voice() {
   const [running, setRunning] = useState(false);
   const [phase, setPhase] = useState<Phase>("asleep");
@@ -79,6 +96,7 @@ export default function Voice() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [playhead, setPlayhead] = useState<{ id: number; t: number } | null>(null);
+  const [tester, setTester] = useState<string | null>(null);
 
   const levels = useRef<number[]>(new Array(BARS).fill(0));
   const who = useRef<("idle" | "you" | "mac")[]>(new Array(BARS).fill("idle"));
@@ -105,6 +123,10 @@ export default function Voice() {
   };
 
   useEffect(() => {
+    api("/api/whoami")
+      .then((r) => r.json())
+      .then((d) => setTester(d.pass ?? null))
+      .catch(() => undefined);
     fetch("/api/models")
       .then((r) => r.json())
       .then((d) => {
@@ -124,7 +146,7 @@ export default function Voice() {
   useEffect(() => gateRef.current?.setSensitivity(sensitivity), [sensitivity]);
 
   const post = async (url: string, init: RequestInit) => {
-    const r = await fetch(url, init);
+    const r = await api(url, init);
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.detail ?? `Request failed (${r.status}).`);
     return d;
@@ -165,7 +187,7 @@ export default function Voice() {
         setTurns((t) => [...t, { id: macId, who: "mac", text: said.text, meta: `${said.seconds}s` }]);
 
         go("speaking", "Speaking");
-        const r = await fetch("/api/speak", {
+        const r = await api("/api/speak", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ text: said.text, voice }),
@@ -289,11 +311,8 @@ export default function Voice() {
   const previewVoice = async (id: string) => {
     setPreviewing(id);
     try {
-      const r = await fetch("/api/speak", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: "This is how I sound.", voice: id }),
-      });
+      // Cached server-side after the first play, so clicking through voices costs nothing.
+      const r = await api(`/api/preview?voice=${encodeURIComponent(id)}`);
       if (!r.ok) throw new Error("preview failed");
       const el = previewRef.current;
       if (!el) return;
@@ -315,8 +334,13 @@ export default function Voice() {
   return (
     <div className="mx-auto max-w-3xl px-5 pb-24">
       <header className="flex flex-col gap-3 border-foreground border-b-2 pt-14 pb-6">
-        <span className="font-mono text-[11px] text-primary uppercase tracking-[0.14em]">
+        <span className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-primary uppercase tracking-[0.14em]">
           Private AI stack · speech demo
+          {tester ? (
+            <span className="rounded-full border border-primary px-2 py-0.5 text-[10px] tracking-[0.08em]">
+              tester pass · {tester}
+            </span>
+          ) : null}
         </span>
         <h1 className="text-balance font-semibold text-3xl leading-[1.05] tracking-tight sm:text-4xl">
           Talk to a Mac that never sends your voice anywhere
