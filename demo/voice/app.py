@@ -25,6 +25,7 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 BASE = os.environ.get("INFER_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("INFER_API_KEY", "")
@@ -166,9 +167,19 @@ async def warm_forever() -> None:
     asyncio.create_task(loop())
 
 
+if (STATIC / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=STATIC / "assets"), name="assets")
+
+
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/vite.svg", include_in_schema=False)
+def favicon() -> Response:
+    f = STATIC / "vite.svg"
+    return FileResponse(f) if f.exists() else Response(status_code=404)
 
 
 @app.get("/api/health")
@@ -201,8 +212,16 @@ async def transcribe(request: Request, audio: UploadFile, seconds: float = Form(
                        files={"file": ("clip.wav", blob, "audio/wav")},
                        data={"model": STT_MODEL})
     took = time.time() - t0
-    text = (r.json().get("text") or "").strip()
-    return JSONResponse({"text": text, "seconds": round(took, 2), "audio_seconds": round(seconds, 2),
+    d = r.json()
+    text = (d.get("text") or "").strip()
+    # The engine returns per-sentence bounds; passing them through is what lets the page offer
+    # click-a-phrase-to-hear-it on the recording, which never leaves the browser.
+    segments = [{"text": (seg.get("text") or "").strip(),
+                 "startSecond": float(seg.get("start") or 0.0),
+                 "endSecond": float(seg.get("end") or 0.0)}
+                for seg in (d.get("segments") or []) if (seg.get("text") or "").strip()]
+    return JSONResponse({"text": text, "segments": segments, "seconds": round(took, 2),
+                         "audio_seconds": round(seconds, 2),
                          "realtime": round(seconds / took, 1) if took > 0 and seconds else None,
                          "model": STT_MODEL})
 

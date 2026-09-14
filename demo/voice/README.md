@@ -8,6 +8,16 @@ demo has no path to any document corpus — it exists to show the speech loop, n
 browser ──► this app (VPS) ──► private endpoint (a Mac) ──► transcribe → answer → speak
 ```
 
+The page is React, built with Vite and Tailwind, using components from the AI SDK's Elements library —
+**mic-selector**, **voice-selector** (with per-voice preview), **transcription** (click a phrase to hear
+that moment of your own recording) and **audio-player**. `npm run dev` inside `web/` proxies the API to
+a backend on :8085; the Dockerfile builds the page in a node stage and serves it from the python one, so
+the runtime image carries no node.
+
+Persona, the library's animated AI visual, was installed and then removed. It is a canned Rive
+animation with five states and no amplitude input; the ring here uses the same five-state vocabulary but
+drives four of them from real audio, which is the more honest picture and one less WebGL dependency.
+
 You press start once and talk. The page listens continuously, notices when you stop, sends that turn,
 speaks the answer and listens again — no push-to-talk.
 

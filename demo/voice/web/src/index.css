@@ -1,0 +1,49 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* The palette the vanilla page used, kept so the demo still looks like itself: form-paper neutrals,
+   a deep teal accent, and a separate green for "this is you speaking". */
+:root {
+  --radius: 0.5rem;
+  --background: #EDEEE9; --foreground: #16191A;
+  --card: #FBFBF9; --card-foreground: #16191A;
+  --popover: #FBFBF9; --popover-foreground: #16191A;
+  --primary: #245D63; --primary-foreground: #F4F8F8;
+  --secondary: #D8E6E7; --secondary-foreground: #16191A;
+  --muted: #E3E5E0; --muted-foreground: #6B7679;
+  --accent: #D8E6E7; --accent-foreground: #16191A;
+  --destructive: #A03A2E;
+  --border: #CFD4CE; --input: #CFD4CE; --ring: #245D63;
+  --you: #2F5D45;
+}
+.dark {
+  --background: #0F1315; --foreground: #E2E7E6;
+  --card: #181D1F; --card-foreground: #E2E7E6;
+  --popover: #181D1F; --popover-foreground: #E2E7E6;
+  --primary: #6DB7BD; --primary-foreground: #0C1618;
+  --secondary: #17302F; --secondary-foreground: #E2E7E6;
+  --muted: #1E2426; --muted-foreground: #8A9496;
+  --accent: #17302F; --accent-foreground: #E2E7E6;
+  --destructive: #E08C7D;
+  --border: #2B3335; --input: #2B3335; --ring: #6DB7BD;
+  --you: #84C0A0;
+}
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --color-you: var(--you);
+  --radius-lg: var(--radius); --radius-md: calc(var(--radius) - 2px); --radius-sm: calc(var(--radius) - 4px);
+}
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  body { @apply bg-background text-foreground antialiased; }
+}

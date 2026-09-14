@@ -41,3 +41,5 @@ stack/observability/grafana/dashboards/*
 !stack/observability/grafana/dashboards/stack/
 stack/observability/local-logs/*
 !stack/observability/local-logs/.gitkeep
+demo/voice/web/node_modules/
+demo/voice/static/
