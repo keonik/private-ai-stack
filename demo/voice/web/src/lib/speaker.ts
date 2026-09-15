@@ -8,7 +8,7 @@ import { envelopeOfBuffer } from "./audio";
 // decoded separately so the ring can draw it and the speech gate can predict its echo.
 
 export type Clip = {
-  kind: "reply" | "filler";
+  kind: "reply" | "filler" | "chime";
   url: string;
   env: number[] | null;
   text: string;

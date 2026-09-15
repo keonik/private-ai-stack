@@ -191,6 +191,45 @@ R.append(row("Logs", 20))
 R.append(logs("rag-ingest", '{service="rag-ingest"} != "GET /metrics" != "GET /health"', (0, 21, 24, 10)))
 (OUT / "rag.json").write_text(json.dumps(dashboard("pas-rag", "Private AI stack — RAG service", R, ["private-ai-stack"]), indent=1))
 
+# ------------------------------------------------------------------ voice demo
+# Scraped from the voice demo's /metrics: how real conversations feel, not how the tests say they should.
+_id = 200
+V = []
+Q = lambda q, m, by="": f'histogram_quantile({q}, sum by (le{", " + by if by else ""}) (rate({m}_bucket[$__rate_interval])))'
+V.append(row("How it feels", 0))
+V.append(stat("First sound p50 (24h)", 'histogram_quantile(0.5, sum by (le) (increase(voice_first_sound_seconds_bucket[24h])))', (0, 1, 4, 4), "s", decimals=2,
+              desc="End of your speech to the first thing you hear — a filler or the answer."))
+V.append(stat("Answer heard p50 (24h)", 'histogram_quantile(0.5, sum by (le) (increase(voice_answer_heard_seconds_bucket[24h])))', (4, 1, 4, 4), "s", decimals=2,
+              desc="End of your speech to the first word of the actual answer."))
+V.append(stat("Answer heard p95 (24h)", 'histogram_quantile(0.95, sum by (le) (increase(voice_answer_heard_seconds_bucket[24h])))', (8, 1, 4, 4), "s", decimals=2,
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 3}, {"color": "red", "value": 5}]}))
+V.append(stat("Turns (24h)", 'sum(increase(voice_turns_total{outcome=~"done|interrupted"}[24h])) or vector(0)', (12, 1, 4, 4), decimals=0))
+V.append(stat("Talked over it (24h)", 'sum(increase(voice_turns_total{outcome="interrupted"}[24h])) or vector(0)', (16, 1, 4, 4), decimals=0,
+              desc="Replies stopped because someone talked over them."))
+V.append(stat("Rate-limited (24h)", 'sum(increase(voice_rate_limited_total[24h])) or vector(0)', (20, 1, 4, 4), decimals=0,
+              thresholds={"mode": "absolute", "steps": [{"color": "green", "value": None}, {"color": "orange", "value": 1}]}))
+V.append(row("Latency", 5))
+V.append(ts("Answer heard p50, by speech engine", [Q(0.5, "voice_answer_heard_seconds", "engine")], (0, 6, 12, 8), "s", legend="{{engine}}"))
+V.append(ts("Answer heard p50, by end-of-turn mode", [Q(0.5, "voice_answer_heard_seconds", "turn")], (12, 6, 12, 8), "s", legend="{{turn}}",
+            desc="smart = Smart Turn model after a 0.3 s pause; pause = a fixed silence. Both include that pause."))
+V.append(ts("First sound p50, fillers on vs off", [Q(0.5, "voice_first_sound_seconds", "fillers")], (0, 14, 12, 8), "s", legend="fillers {{fillers}}"))
+V.append(ts("Pipeline stages p50", [Q(0.5, "voice_stage_seconds", "stage")], (12, 14, 12, 8), "s", legend="{{stage}}",
+            desc="From the end-of-turn decision: transcript back (heard) and the first sentence written (first_words)."))
+V.append(row("Turn-taking", 22))
+V.append(ts("How turns ended", ["sum by (outcome) (increase(voice_turns_total[$__rate_interval]))"], (0, 23, 8, 8), "short", legend="{{outcome}}", stack=True,
+            desc="reopened = you carried on before the answer started; ignored = a 'yeah' over the reply; continued = spoke again before any answer played."))
+V.append(ts("Smart Turn verdicts", ["sum by (verdict) (increase(voice_smart_turn_total[$__rate_interval]))"], (8, 23, 8, 8), "short", legend="{{verdict}}", stack=True))
+V.append(ts("Sounds over the reply", ["sum by (verdict) (increase(voice_backchannel_total[$__rate_interval]))"], (16, 23, 8, 8), "short", legend="{{verdict}}", stack=True,
+            desc="backchannel = 'yeah', 'mm-hmm' and friends, ignored; interrupt = real words, stopped the reply; ambient = no words at all."))
+V.append({"id": nid(), "type": "heatmap", "title": "Smart Turn probability (how sure it was)", "datasource": PROM, "gridPos": grid(0, 31, 12, 8),
+          "options": {"calculate": False, "yAxis": {"unit": "short"}, "color": {"scheme": "Oranges", "mode": "scheme"}},
+          "targets": [{"refId": "A", "datasource": PROM, "expr": "sum by (le) (increase(voice_smart_turn_probability_bucket[$__rate_interval]))", "format": "heatmap", "legendFormat": "{{le}}"}],
+          "description": "Most mass near 0 or 1 means the model is confident; a pile in the middle means pauses it cannot call."})
+V.append(ts("Smart Turn inference p50 / p95", [{"expr": Q(0.5, "voice_smart_turn_inference_seconds"), "legendFormat": "p50"},
+                                               {"expr": Q(0.95, "voice_smart_turn_inference_seconds"), "legendFormat": "p95"}], (12, 31, 12, 8), "s"))
+V.sort(key=lambda d: (d["gridPos"]["y"], d["gridPos"]["x"]))
+(OUT / "voice.json").write_text(json.dumps(dashboard("pas-voice", "Private AI stack — voice demo", V, ["private-ai-stack", "voice"], frm="now-24h"), indent=1))
+
 # ------------------------------------------------------------------ local overlay
 # Anything else on this machine that you want dashboards for lives outside this repo: drop a
 # build_*_local.py in stack/local/ (gitignored) and it runs here with the same helpers, writing to

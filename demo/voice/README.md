@@ -195,6 +195,18 @@ From the moment you stop talking to the first word heard, Kokoro, three runs eac
 
 The same pause-mode turn measured ~2.8 s before the silence was skipped.
 
+**Transcription runs alongside the end-of-turn decision**, not after it: it is ~0.1 s of GPU, and a turn
+that continues just throws the result away. The transcript now arrives 0.14 s after the pause instead of
+~0.7 s. **A start chime** plays through the same element as the replies, and the microphone level during
+it gives this room's echo before the first reply rather than during it. **The screen is held awake** during
+a conversation (Screen Wake Lock), because phones dim and then cut the microphone.
+
+**Metrics.** Each finished turn reports numbers and enums — never text — to `/api/lab-metrics`; `/metrics`
+serves them to Prometheus, answering only direct requests or a `METRICS_TOKEN` bearer. The *voice demo*
+dashboard in Grafana shows first sound and answer heard (p50/p95), latency by speech engine and by
+end-of-turn mode, how turns ended, Smart Turn's verdicts and confidence, and what sounds over the reply
+were judged to be — so the heuristics above can be tuned on real sessions.
+
 `tests/conversation.spec.ts` runs whole conversations in Chromium with a **fake microphone playing a
 recorded voice**: a plain turn, talking over a story until it stops and answers the new question, the
 slowest engine with fillers on, stopping mid-thought and carrying on (one question, not two), and a

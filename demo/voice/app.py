@@ -242,6 +242,71 @@ def backchannel_verdict(text: str) -> str:
     return "interrupt"
 
 
+# ---------------------------------------------------------------------------------------------------------
+# Metrics, for Prometheus. Only numbers and enums: no transcripts, no voices, no addresses — the page promises
+# nothing is kept, and a latency histogram does not need to know what anyone said.
+class _Hist:
+    def __init__(self, buckets):
+        self.buckets, self.series = buckets, {}
+
+    def observe(self, labels: tuple, v: float) -> None:
+        counts, total = self.series.setdefault(labels, ([0] * len(self.buckets), [0.0, 0]))
+        for i, b in enumerate(self.buckets):
+            if v <= b:
+                counts[i] += 1
+        total[0] += v
+        total[1] += 1
+
+
+LATENCY_BUCKETS = (0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 6, 10)
+METRIC_HISTS = {
+    "voice_answer_heard_seconds": (_Hist(LATENCY_BUCKETS), ("reply", "engine", "turn"),
+                                   "From the end of your speech to the first word of the answer"),
+    "voice_first_sound_seconds": (_Hist(LATENCY_BUCKETS), ("turn", "fillers"),
+                                  "From the end of your speech to the first sound, filler or answer"),
+    "voice_stage_seconds": (_Hist(LATENCY_BUCKETS), ("stage",), "Pipeline stages, from the end-of-turn decision"),
+    "voice_smart_turn_probability": (_Hist((0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 1)), (),
+                                     "Smart Turn's probability that a pause ended the turn"),
+    "voice_smart_turn_inference_seconds": (_Hist((0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.25, 0.5)), (),
+                                           "Smart Turn model time on this app's CPU"),
+}
+METRIC_COUNTS: dict[str, tuple[dict, tuple, str]] = {
+    "voice_turns_total": ({}, ("outcome", "reply", "engine", "turn", "barge"), "Turns by how they ended"),
+    "voice_backchannel_total": ({}, ("verdict",), "Sounds made over the reply, by verdict"),
+    "voice_smart_turn_total": ({}, ("verdict",), "Smart Turn decisions"),
+    "voice_rate_limited_total": ({}, ("tier",), "Requests refused by the demo's own limits"),
+}
+
+
+def count(name: str, *labels: str) -> None:
+    series = METRIC_COUNTS[name][0]
+    series[labels] = series.get(labels, 0) + 1
+
+
+def observe(name: str, value: float, *labels: str) -> None:
+    METRIC_HISTS[name][0].observe(labels, value)
+
+
+def _lbl(names, values, extra: str = "") -> str:
+    parts = [f'{n}="{v}"' for n, v in zip(names, values)] + ([extra] if extra else [])
+    return "{" + ",".join(parts) + "}" if parts else ""
+
+
+def render_metrics() -> str:
+    out = []
+    for name, (series, names, help_) in METRIC_COUNTS.items():
+        out += [f"# HELP {name} {help_}", f"# TYPE {name} counter"]
+        out += [f"{name}{_lbl(names, labels)} {v}" for labels, v in sorted(series.items())]
+    for name, (h, names, help_) in METRIC_HISTS.items():
+        out += [f"# HELP {name} {help_}", f"# TYPE {name} histogram"]
+        for labels, (counts, (total, n)) in sorted(h.series.items()):
+            out += [f"{name}_bucket{_lbl(names, labels, f'le="{b}"')} {c}" for b, c in zip(h.buckets, counts)]
+            out += [f"{name}_bucket{_lbl(names, labels, 'le="+Inf"')} {n}",
+                    f"{name}_sum{_lbl(names, labels)} {total}", f"{name}_count{_lbl(names, labels)} {n}"]
+    out += ["# TYPE voice_requests_served_today gauge", f"voice_requests_served_today {_day[1]}"]
+    return "\n".join(out) + "\n"
+
+
 _hits: dict[str, deque] = defaultdict(deque)
 _day = ["", 0]
 
@@ -272,6 +337,7 @@ def guard(request: Request, cost: int = 1) -> None:
     if _day[0] != today:
         _day[0], _day[1] = today, 0
     if _day[1] >= DAILY_BUDGET and not holder:
+        count("voice_rate_limited_total", "daily")
         raise HTTPException(429, "The demo has used its budget for today. It resets at midnight UTC.")
     _day[1] += cost
 
@@ -285,6 +351,7 @@ def guard(request: Request, cost: int = 1) -> None:
     while q and now - q[0] > window:
         q.popleft()
     if len(q) + cost > limit:
+        count("voice_rate_limited_total", "pass" if holder else "anonymous")
         raise HTTPException(429, "That is a lot of requests. Give it a minute.")
     q.extend([now] * cost)
 
@@ -521,7 +588,65 @@ async def backchannel(request: Request, audio: UploadFile) -> JSONResponse:
     r = await upstream("POST", "/audio/transcriptions", files={"file": ("clip.wav", blob, "audio/wav")},
                        data={"model": STT_MODEL})
     text = (r.json().get("text") or "").strip()
+    count("voice_backchannel_total", backchannel_verdict(text))
     return JSONResponse({"verdict": backchannel_verdict(text), "text": text, "seconds": round(time.time() - t0, 3)})
+
+
+ENUMS = {"reply": {"eager", "stream", "whole"}, "turn": {"smart", "pause"}, "barge": {"smart", "instant", "off"},
+         "fillers": {"off", "slow", "quick"},
+         "outcome": {"done", "interrupted", "continued", "reopened", "ignored", "timeout", "error"},
+         "engine": {e["id"] for e in TTS_ENGINES}}
+_metric_posts: dict[str, deque] = defaultdict(deque)
+
+
+@app.post("/api/lab-metrics")
+async def lab_metrics(request: Request, payload: dict) -> Response:
+    """The page reports how each turn went. Numbers and enums only; anything else is dropped."""
+    ip = (request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
+          or (request.client.host if request.client else "?")).strip()
+    q, now = _metric_posts[ip], time.time()
+    while q and now - q[0] > 300:
+        q.popleft()
+    if len(q) >= 200:  # silently: a metrics beacon is not worth an error
+        return Response(status_code=204)
+    q.append(now)
+
+    def enum(k: str) -> str:
+        v = str(payload.get(k) or "")
+        return v if v in ENUMS[k] else "other"
+
+    def secs(k: str) -> float | None:
+        try:
+            v = float(payload.get(k))
+        except (TypeError, ValueError):
+            return None
+        return v if 0 <= v <= 60 else None
+
+    outcome, reply, engine, turn = enum("outcome"), enum("reply"), enum("engine"), enum("turn")
+    count("voice_turns_total", outcome, reply, engine, turn, enum("barge"))
+    silence = secs("silence") or 0.0
+    answer, filler = secs("firstSound"), secs("filler")
+    if answer is not None:
+        observe("voice_answer_heard_seconds", answer + silence, reply, engine, turn)
+    first = min(x for x in (answer, filler, 99.0) if x is not None)
+    if first < 99:
+        observe("voice_first_sound_seconds", first + silence, turn, enum("fillers"))
+    for stage, key in (("heard", "heard"), ("first_words", "firstWords")):
+        if (v := secs(key)) is not None:
+            observe("voice_stage_seconds", v, stage)
+    return Response(status_code=204)
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request) -> Response:
+    """Prometheus. Answered directly on the machine; through a proxy only with METRICS_TOKEN as a bearer."""
+    import hmac
+    token = os.environ.get("METRICS_TOKEN", "")
+    proxied = request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for")
+    offered = request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+    if proxied and not (token and hmac.compare_digest(offered.encode(), token.encode())):
+        raise HTTPException(404)
+    return Response(render_metrics(), media_type="text/plain; version=0.0.4")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -609,6 +734,12 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
         http = client()
         tasks: list[asyncio.Task] = []
         try:
+            # Transcription starts now, alongside the end-of-turn decision rather than after it: it is ~0.1 s of
+            # GPU, and a turn that turns out to continue just throws the result away. On an "unfinished"
+            # verdict the text is ready by the time the 600 ms wait ends.
+            stt_task = asyncio.create_task(http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
+                                                     files={"file": ("clip.wav", blob, "audio/wav")}))
+            tasks.append(stt_task)
             if use_smart:
                 st = smart_turn()
                 if st is None:
@@ -620,6 +751,10 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
                     except Exception:  # noqa: BLE001 — a clip the model cannot read is answered, not dropped
                         verdict = {"complete": True, "probability": None, "ms": 0}
                     yield sse("turn", **verdict, available=True, at=since())
+                    count("voice_smart_turn_total", "complete" if verdict["complete"] else "incomplete")
+                    if verdict["probability"] is not None:
+                        observe("voice_smart_turn_probability", verdict["probability"])
+                        observe("voice_smart_turn_inference_seconds", verdict["ms"] / 1000)
                     if not verdict["complete"]:
                         # Not finished, by the sound of it. Wait before spending GPU on it; if you carry on,
                         # the page cancels this request and sends the longer clip instead.
@@ -630,8 +765,7 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
                 yield sse("error", detail=e.detail)
                 return
             yield sse("proceed", at=since())
-            r = await http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
-                                  files={"file": ("clip.wav", blob, "audio/wav")})
+            r = await stt_task
             if r.status_code >= 400:
                 yield sse("error", detail=f"Transcription failed ({r.status_code}).")
                 return

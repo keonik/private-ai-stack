@@ -34,7 +34,7 @@ import {
 import { Transcription, TranscriptionSegment } from "@/components/ai-elements/transcription";
 import { Button } from "@/components/ui/button";
 import { Ring, type Phase } from "@/components/Ring";
-import { SILENT_WAV, createGate, BLOCK, PAUSE_MS, type GateEvent, type Sensitivity } from "@/lib/audio";
+import { SILENT_WAV, chime, createGate, BLOCK, PAUSE_MS, type GateEvent, type Sensitivity } from "@/lib/audio";
 import { createSpeaker, shapeOf, speechBounds, type Clip } from "@/lib/speaker";
 
 type Segment = { text: string; startSecond: number; endSecond: number };
@@ -61,8 +61,11 @@ type Lab = {
   endOfTurn: number;
   turn: TurnMode;
   transcript: TranscriptMode;
+  chime: boolean;
 };
-const LAB_DEFAULT: Lab = { reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken" };
+const LAB_DEFAULT: Lab = {
+  reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken", chime: true,
+};
 const FILLER_AFTER: Record<Exclude<FillerMode, "off">, number> = { quick: 250, slow: 600 };
 
 // Smart Turn, after Hugging Face speech-to-speech: a turn that sounds finished starts at once and can still be
@@ -82,6 +85,9 @@ type Run = {
   model: string;
   engine: string;
   silence: number;
+  turnMode: TurnMode;
+  barge: BargeMode;
+  fillers: FillerMode;
   heard?: number;
   firstWords?: number;
   firstSound?: number;
@@ -236,6 +242,8 @@ export default function Voice() {
   // of the Mac's own voice comes back into the microphone in this room, after the browser's echo cancelling.
   const echoRatios = useRef<number[]>([]);
   const bargeRef = useRef<Barge | null>(null);
+  const wakeRef = useRef<WakeLockSentinel | null>(null);
+  const reported = useRef(new Set<number>());
   const gateHandler = useRef<(e: GateEvent) => void>(() => undefined);
 
   const push = (v: number, src: "idle" | "you" | "mac") => {
@@ -285,6 +293,39 @@ export default function Voice() {
   useEffect(() => gateRef.current?.setSensitivity(sensitivity), [sensitivity]);
   useEffect(() => gateRef.current?.setSilence(lab.endOfTurn), [lab.endOfTurn]);
   useEffect(() => gateRef.current?.setEndMode(lab.turn), [lab.turn]);
+
+  // Each finished turn is reported once, as numbers and enums, so real sessions show up in Grafana rather
+  // than only the synthetic ones in the tests. Nothing anyone said is sent.
+  useEffect(() => {
+    for (const r of runs) {
+      if (!r.outcome || reported.current.has(r.id)) continue;
+      if (r.outcome === "done" && r.firstSound === undefined && r.filler === undefined) continue; // still settling
+      reported.current.add(r.id);
+      const body = JSON.stringify({
+        outcome: r.outcome, reply: r.reply, engine: r.engine, turn: r.turnMode, barge: r.barge, fillers: r.fillers,
+        silence: r.silence, heard: r.heard, firstWords: r.firstWords, firstSound: r.firstSound, filler: r.filler,
+      });
+      void api("/api/lab-metrics", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true })
+        .catch(() => undefined);
+    }
+  }, [runs]);
+
+  // Phones dim the screen and then cut the microphone mid-conversation. Hold the screen awake while talking;
+  // browsers drop the lock whenever the tab is hidden, so take it again on return.
+  useEffect(() => {
+    if (!running) return;
+    const hold = () => {
+      if (document.visibilityState !== "visible" || (wakeRef.current && !wakeRef.current.released)) return;
+      navigator.wakeLock?.request("screen").then((l) => (wakeRef.current = l)).catch(() => undefined);
+    };
+    hold();
+    document.addEventListener("visibilitychange", hold);
+    return () => {
+      document.removeEventListener("visibilitychange", hold);
+      void wakeRef.current?.release().catch(() => undefined);
+      wakeRef.current = null;
+    };
+  }, [running]);
   useEffect(() => {
     if (running) void prepareFillers(engine, voice);
   }, [engine, voice, running]);
@@ -444,7 +485,8 @@ export default function Voice() {
       // the echo allowance, it never throws the utterance away.
       gate?.setMode(speculative || L.barge !== "off" ? "barge" : "paused");
       const silence = (speculative ? PAUSE_MS : L.endOfTurn) / 1000;
-      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence }, ...rs].slice(0, 40));
+      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence, turnMode: speculative ? "smart" as const : "pause" as const,
+        barge: L.barge, fillers: L.fillers }, ...rs].slice(0, 40));
       go("thinking", "Transcribing");
 
       // The Qwen runtime's watchdog: if nothing arrives for a while, say so instead of hanging.
@@ -599,6 +641,7 @@ export default function Voice() {
     speakerRef.current?.duck(false);
     const rid = nextId.current++;
     setRuns((rs) => [{ id: rid, reply: labRef.current.reply, model, engine, silence: 0, outcome: "ignored" as const,
+      turnMode: labRef.current.turn, barge: labRef.current.barge, fillers: labRef.current.fillers,
       note: heard || "(noise)", turnP: null }, ...rs].slice(0, 40));
     if (curRef.current) go("speaking", "Speaking · talk to interrupt");
     // The sound has ended: forget it. In pause mode the gate closes it itself a moment later.
@@ -635,7 +678,7 @@ export default function Voice() {
       if (playing && !e.speaking) {
         push(sp.level() * 3.2, "mac");
         const peak = sp.recentPeak();
-        if (gate.mode === "barge" && peak > 0.03 && !sp.ducked) {
+        if ((gate.mode === "barge" || sp.playingKind === "chime") && peak > 0.03 && !sp.ducked) {
           echoRatios.current.push(e.rms / peak);
           if (echoRatios.current.length > 120) echoRatios.current.shift();
         }
@@ -767,6 +810,19 @@ export default function Voice() {
     });
     gateRef.current = gate;
     void prepareFillers(engine, voice);
+    if (labRef.current.chime && sp) {
+      // Measure this room's echo before the first reply: the gate only listens to levels while the chime plays.
+      echoRatios.current = [];
+      gate.setMode("paused");
+      const c = chime();
+      sp.enqueue({ kind: "chime", url: c.url, env: c.env, text: "" });
+      const settle = () => {
+        if (gateRef.current !== gate) return;
+        if (sp.busy) return void window.setTimeout(settle, 60);
+        if (!curRef.current) gate.setMode("listen");
+      };
+      window.setTimeout(settle, 120);
+    }
 
     const src = ctx.createMediaStreamSource(stream);
     const node = ctx.createScriptProcessor(BLOCK, 1, 1);
@@ -1043,6 +1099,14 @@ export default function Voice() {
                 <option value={450}>0.45 s · snappy, may cut you off</option>
                 <option value={700}>0.7 s · default</option>
                 <option value={1000}>1 s · patient</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
+              Start chime
+              <select aria-label="Start chime" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
+                onChange={(e) => setLab({ chime: e.target.value === "on" })} value={lab.chime ? "on" : "off"}>
+                <option value="on">On · measures this room's echo first</option>
+                <option value="off">Off</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">

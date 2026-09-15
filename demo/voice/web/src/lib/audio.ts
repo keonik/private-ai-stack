@@ -297,6 +297,57 @@ export function envelopeOfBuffer(b: AudioBuffer): number[] {
   return env;
 }
 
+/**
+ * A short rising two-note chime, made here rather than fetched. It says "listening" when a conversation
+ * starts, and — played through the same element as the replies — it is how much of the Mac's own voice
+ * comes back into the microphone is measured before the first reply rather than during it.
+ */
+export function chime(): { url: string; env: number[] } {
+  const rate = 24_000;
+  const notes = [
+    { f: 660, at: 0, len: 0.22 },
+    { f: 880, at: 0.16, len: 0.42 },
+  ];
+  const n = Math.round(rate * 0.62);
+  const pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = i / rate;
+    let v = 0;
+    for (const { f, at, len } of notes) {
+      const u = t - at;
+      if (u < 0 || u > len) continue;
+      const attack = Math.min(1, u / 0.012);
+      const decay = Math.exp(-u * 5.5);
+      v += Math.sin(2 * Math.PI * f * u) * attack * decay * 0.32 + Math.sin(4 * Math.PI * f * u) * attack * decay * 0.05;
+    }
+    pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7fff;
+  }
+  const head = new ArrayBuffer(44);
+  const dv = new DataView(head);
+  const str = (o: number, t: string) => [...t].forEach((c, k) => dv.setUint8(o + k, c.charCodeAt(0)));
+  str(0, "RIFF");
+  dv.setUint32(4, 36 + pcm.byteLength, true);
+  str(8, "WAVEfmt ");
+  dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);
+  dv.setUint16(22, 1, true);
+  dv.setUint32(24, rate, true);
+  dv.setUint32(28, rate * 2, true);
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  str(36, "data");
+  dv.setUint32(40, pcm.byteLength, true);
+  const shape = envelopeOf(concat(head, pcm.buffer));
+  return { url: URL.createObjectURL(new Blob([head, pcm], { type: "audio/wav" })), env: shape?.env ?? [] };
+}
+
+function concat(a: ArrayBuffer, b: ArrayBuffer): ArrayBuffer {
+  const out = new Uint8Array(a.byteLength + b.byteLength);
+  out.set(new Uint8Array(a), 0);
+  out.set(new Uint8Array(b), a.byteLength);
+  return out.buffer;
+}
+
 /** A moment of silence played inside a tap is what marks an element as user-permitted on iOS. */
 export const SILENT_WAV =
   "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
