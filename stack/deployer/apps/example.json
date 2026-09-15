@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/you/your-repo.git",
+  "branch": "main",
+  "context": "path/inside/repo",
+  "dockerfile": "Dockerfile",
+  "port": 8080,
+  "publish": 8093,
+  "health": "/health",
+  "health_timeout": 90,
+  "env_file": "~/.config/deployer/env/example.env",
+  "watch": ["path/inside/repo"],
+  "docker_args": []
+}

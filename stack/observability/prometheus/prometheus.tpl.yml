@@ -44,6 +44,11 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox:9115
 
+  # The voice demo, run on this Mac by deployer/ (published on 127.0.0.1:8093): per-turn latency, Smart Turn
+  # verdicts and interruption outcomes reported by real sessions. See the "voice demo" dashboard.
+  - job_name: voice-demo
+    static_configs: [{ targets: ["host.docker.internal:8093"] }]
+
   # The Mac itself: disk, memory, load. Runs on the host because a container cannot see macOS.
   - job_name: host
     static_configs: [{ targets: ["host.docker.internal:9419"] }]
