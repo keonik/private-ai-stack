@@ -215,6 +215,11 @@ of interrupting, not how it behaves on a laptop speaker — that part needs a pe
 
 ## Run it
 
+**Where it runs.** The page and API now run on the same Mac as the models, deployed by
+[`stack/deployer`](../../stack/deployer/README.md) on every push that touches `demo/voice/`. The app talks to
+the inference gateway over the loopback instead of through Cloudflare, and Prometheus scrapes it locally.
+It ran on a Coolify VPS before that; the Dockerfile is the same either way, so moving it back is a DNS change.
+
 ```bash
 docker build -t voice-demo . && docker run -p 8080:8080 \
   -e INFER_BASE_URL=https://your-endpoint/v1 \
