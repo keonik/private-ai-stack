@@ -29,9 +29,21 @@ export const SENSITIVITY: Record<Sensitivity, { start: number; keep: number; abs
   low: { start: 4.0, keep: 2.4, abs: 0.002 },
 };
 
+export const PAUSE_MS = 300; // a pause worth asking Smart Turn about
+const RESUME_MS = 120; // voice after a pause that means you carried on
+const SMART_MAX_SILENCE_MS = 2500; // smart mode: an utterance nobody committed closes itself after this
+
+/**
+ * pause  — "turn" fires after a fixed silence (the original behaviour).
+ * smart  — no "turn" event; the page asks Smart Turn at every "pause" and commits the utterance itself.
+ */
+export type EndMode = "pause" | "smart";
+
 export type GateEvent =
   | { type: "level"; rms: number; normalised: number; speaking: boolean }
   | { type: "open" }
+  | { type: "pause"; blob: Blob; seconds: number }
+  | { type: "resume" }
   | { type: "turn"; blob: Blob; seconds: number };
 
 /** The speech gate: feed it blocks of PCM, it tells you when a turn started and hands you the audio. */
@@ -48,12 +60,17 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
   let utterance: Float32Array[] = [];
   let utteranceFrames = 0;
   let mode: GateMode = "listen";
+  let endMode: EndMode = "pause";
+  let voicedMs = 0;
+  let pauseSent = false;
+  let resumeMs = 0;
   let silenceLimit = SILENCE_MS;
   let echo: () => number = () => 0;
 
   const reset = () => {
     speaking = false;
-    speechMs = silenceMs = 0;
+    speechMs = silenceMs = voicedMs = resumeMs = 0;
+    pauseSent = false;
     preroll = [];
     utterance = [];
     prerollFrames = utteranceFrames = 0;
@@ -78,6 +95,20 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
     },
     setSilence(ms: number) {
       silenceLimit = ms;
+    },
+    setEndMode(m: EndMode) {
+      endMode = m;
+    },
+    /** Close the current utterance: what follows is a new one. Used once a smart turn can no longer reopen. */
+    commit() {
+      if (speaking) reset();
+    },
+    /** How much of the open utterance was actually voice, in ms — a backchannel is short. */
+    get voicedMs() {
+      return voicedMs;
+    },
+    get speaking() {
+      return speaking;
     },
     /** Expected echo of the reply at this instant, in the same units as the microphone's RMS. */
     setEcho(fn: () => number) {
@@ -134,8 +165,31 @@ export function createGate(sampleRate: number, onEvent: (e: GateEvent) => void) 
 
       utterance.push(copy);
       utteranceFrames += copy.length;
-      silenceMs = rms > keepT + (barge ? echo() * BARGE_MARGIN * 0.6 : 0) ? 0 : silenceMs + ms;
+      const voiced = rms > keepT + (barge ? echo() * BARGE_MARGIN * 0.6 : 0);
+      silenceMs = voiced ? 0 : silenceMs + ms;
+      if (voiced) voicedMs += ms;
       const turnMs = (utteranceFrames / sampleRate) * 1000;
+
+      // A pause long enough to ask about. Sent once per pause; the utterance stays open.
+      if (!pauseSent && silenceMs >= PAUSE_MS) {
+        pauseSent = true;
+        resumeMs = 0;
+        const { blob, seconds } = encodeWav(utterance, utteranceFrames, sampleRate);
+        onEvent({ type: "pause", blob, seconds });
+      } else if (pauseSent) {
+        // Carrying on after a pause needs a clear signal, not a breath.
+        resumeMs = rms > openAt ? resumeMs + ms : Math.max(0, resumeMs - ms);
+        if (resumeMs >= RESUME_MS) {
+          pauseSent = false;
+          resumeMs = 0;
+          onEvent({ type: "resume" });
+        }
+      }
+
+      if (endMode === "smart") {
+        if (silenceMs >= SMART_MAX_SILENCE_MS || turnMs >= MAX_TURN_MS) reset();
+        return;
+      }
       if (silenceMs >= silenceLimit || turnMs >= MAX_TURN_MS) {
         const blocks = utterance;
         const frames = utteranceFrames;

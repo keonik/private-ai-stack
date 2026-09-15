@@ -145,9 +145,60 @@ Left out: Qwen3-TTS *ryan* (97-114 words a minute, 13-15% errors) and *dylan* on
 TTS is non-commercial, oMLX does not serve Orpheus, and CSM needs gated access. The gateway rejects a
 speech request with no `voice` at all, so Chatterbox, which has one built-in voice, is still sent a name.
 
+### What was taken from Qwen Audio Agent
+
+[Qwen Audio Agent](https://github.com/QwenAudio/qwen-audio-agent) (Apache-2.0) is a realtime voice runtime,
+not a model. Reading its source settled where the clever parts live: **semantic end-of-turn and ignoring
+"uh-huh" happen inside Alibaba's cloud models** (`smart_turn` on Qwen-Audio-3.0-Realtime, `semantic_vad` on
+Qwen3.5-Omni), which have no open weights. The runtime itself contributes plumbing — turn generations that
+drop late events, transcripts released only when audio starts playing, playback receipts, a hard stop and
+a 12-second "never answered" watchdog. Its local mode delegates to Hugging Face speech-to-speech, which uses
+Pipecat's open Smart Turn model and has no backchannel filter at all. So the closed parts are rebuilt here
+from open ones, each a switch:
+
+**How it knows you are done — Smart Turn.** At every 300 ms pause the page sends the utterance so far;
+the server runs [Smart Turn v3.2](https://huggingface.co/pipecat-ai/smart-turn-v3) (BSD-2, 8.7 MB, ~40 ms on
+CPU, in this app's container) over the last eight seconds, which hears intonation and words together. If
+it sounds finished the answer starts at once and the turn can still be **reopened for 800 ms**; if not,
+the server waits 600 ms before transcribing and the turn stays reopenable for **2 s** — the timings Hugging
+Face speech-to-speech uses. Carrying on inside that window cancels the request quietly and the next pause
+sends the whole sentence, so *"I was wondering if you could tell me about the… tallest mountain in Ohio"*
+is one question. The model wants Whisper log-mel features; `smart_turn.py` computes them in numpy rather
+than pulling in `transformers`, and matches it to within 1.2e-7. On synthetic speech it scored 18 of 20
+complete/unfinished phrases correctly; both misses were unfinished sentences Kokoro read with a final,
+falling intonation.
+
+**Talking over the reply — smart.** The reply is turned down to 30% the moment you make a sound (iOS
+ignores `volume` on media elements, so there it pauses instead). More than ~0.9 s of voice is an
+interruption without asking. Anything shorter is transcribed once it ends and only stops the reply if it
+has real words: "yeah", "mm-hmm", "okay", "right" and friends restore the volume and are logged as
+*ignored*. It waits for the sound to end because **Parakeet writes "Yeah." for almost any clip under half a
+second** — including one cut from *"What about the moon?"* — so deciding early would ignore real
+interruptions. The word list and durations are this project's heuristics, not a published standard.
+
+**The Mac's words appear as they are spoken**, not as they are written, so an interrupted answer never shows
+text you did not hear. **Late events from a cancelled turn are dropped**, and **a 12 s watchdog** says
+"say that again" instead of hanging.
+
+**Engine silence is skipped at playback.** Kokoro pads every clip with ~0.4 s of silence before the first
+word and 0.5-0.7 s after the last. The page already decodes each clip to draw it, so it now starts at the
+first word and stops at the last: every reply begins ~0.4 s sooner, gaps between sentences halve, and a
+filler shrank from 1.3-1.7 s to its words. The latency table measures when the first *word* is heard.
+
+From the moment you stop talking to the first word heard, Kokoro, three runs each:
+
+| end of turn | fillers | filler heard | answer heard |
+|---|---|---|---|
+| 0.7 s pause | off | — | 2.42 s |
+| Smart Turn | off | — | **2.13 s** |
+| Smart Turn | when slow | **0.96 s** | 2.12 s |
+
+The same pause-mode turn measured ~2.8 s before the silence was skipped.
+
 `tests/conversation.spec.ts` runs whole conversations in Chromium with a **fake microphone playing a
-recorded voice**: a plain turn, talking over a story until it stops and answers the new question, and
-the slowest engine with fillers on. There is no room echo in a headless browser, so those prove the logic
+recorded voice**: a plain turn, talking over a story until it stops and answers the new question, the
+slowest engine with fillers on, stopping mid-thought and carrying on (one question, not two), and a
+"yeah" said over a story that must not stop it. `localStorage.debug = "1"` logs every gate decision. There is no room echo in a headless browser, so those prove the logic
 of interrupting, not how it behaves on a laptop speaker — that part needs a person.
 
 ## Run it

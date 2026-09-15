@@ -206,6 +206,42 @@ def speech_body(engine: str, voice: str, text: str, fmt: str) -> dict:
     return {"model": engine, "input": text, "response_format": fmt, "voice": voice}
 
 
+# Smart Turn runs here, on this app's CPU, not on the inference machine: it is 8.7 MB and ~40 ms, and the
+# audio is already in this process. If the model or onnxruntime is missing the page falls back to pauses.
+SMART_TURN_MODEL = os.environ.get("SMART_TURN_MODEL", str(Path(__file__).parent / "smart-turn-v3.2-cpu.onnx"))
+INCOMPLETE_HOLD_S = 0.6    # after "not finished": wait this long before transcribing, in case you carry on
+_smart_turn = None
+
+
+def smart_turn():
+    global _smart_turn
+    if _smart_turn is None:
+        try:
+            from smart_turn import SmartTurn
+            _smart_turn = SmartTurn(SMART_TURN_MODEL)
+        except Exception as e:  # noqa: BLE001 — any failure here just means "use pauses"
+            _smart_turn = e
+    return None if isinstance(_smart_turn, Exception) else _smart_turn
+
+
+# Talking over the reply: short sounds that mean "I'm listening", not "stop". Measured against Parakeet on
+# synthetic clips — it writes "Yeah." for most very short sounds, and anything cut to under half a second
+# (including "What about the moon?") came back as "Yeah." or "Okay.", which is why the page waits for the
+# sound to end before asking, and treats more than 0.9 s of voice as an interruption without asking at all.
+BACKCHANNELS = {"mm", "mmm", "hmm", "hm", "mhm", "mm-hmm", "mmhmm", "uh-huh", "uhhuh", "uh", "um", "ah", "oh",
+                "yeah", "yea", "yep", "yup", "yes", "ok", "okay", "right", "sure", "cool", "nice", "wow",
+                "gotcha", "true", "exactly", "totally", "i", "see", "got", "it", "alright", "aha"}
+
+
+def backchannel_verdict(text: str) -> str:
+    words = re.findall(r"[a-z]+(?:-[a-z]+)?", text.lower())
+    if not words:
+        return "ambient"
+    if len(words) <= 3 and all(w in BACKCHANNELS for w in words):
+        return "backchannel"
+    return "interrupt"
+
+
 _hits: dict[str, deque] = defaultdict(deque)
 _day = ["", 0]
 
@@ -308,6 +344,7 @@ async def warm_forever() -> None:
             await asyncio.sleep(240)
 
     asyncio.create_task(loop())
+    asyncio.create_task(asyncio.to_thread(smart_turn))
 
 
 if (STATIC / "assets").is_dir():
@@ -328,7 +365,7 @@ def favicon() -> Response:
 @app.get("/api/health")
 def health() -> JSONResponse:
     return JSONResponse({"ok": True, "enabled": ENABLED, "configured": bool(BASE and KEY),
-                         "served_today": _day[1], "budget": DAILY_BUDGET,
+                         "served_today": _day[1], "budget": DAILY_BUDGET, "smart_turn": smart_turn() is not None,
                          "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
 
 
@@ -473,6 +510,20 @@ async def filler(request: Request, voice: str = Query(...), i: int = Query(0),
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.post("/api/backchannel")
+async def backchannel(request: Request, audio: UploadFile) -> JSONResponse:
+    """Was that sound, made while the Mac was talking, an interruption or just "mm-hmm"?"""
+    guard(request)
+    blob = await audio.read()
+    if len(blob) > MAX_AUDIO_BYTES // 8:
+        return JSONResponse({"verdict": "interrupt", "text": "", "reason": "long"})
+    t0 = time.time()
+    r = await upstream("POST", "/audio/transcriptions", files={"file": ("clip.wav", blob, "audio/wav")},
+                       data={"model": STT_MODEL})
+    text = (r.json().get("text") or "").strip()
+    return JSONResponse({"verdict": backchannel_verdict(text), "text": text, "seconds": round(time.time() - t0, 3)})
+
+
 # ---------------------------------------------------------------------------------------------------------
 # One request per turn: transcribe, answer, speak, streamed back as server-sent events.
 #
@@ -533,7 +584,9 @@ def sse(kind: str, **data) -> bytes:
 async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
     from fastapi.responses import StreamingResponse
 
-    guard(request, cost=3)  # the same GPU work as the three separate calls it replaces
+    # One request now, two more once the turn is really answered: a turn that is cancelled because you carried
+    # on talking should not cost you three requests' worth of limit.
+    guard(request, cost=1)
     blob = await audio.read()
     if len(blob) > MAX_AUDIO_BYTES:
         raise HTTPException(413, "That clip is too long for the demo. Keep it under about two minutes.")
@@ -549,12 +602,34 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
     # mountain in Ohio" is answered as one question rather than two.
     carry = str(opts.get("carry") or "").strip()[:MAX_TEXT]
     seconds = float(opts.get("seconds") or 0)
+    use_smart = opts.get("turn") == "smart"
     async def events():
         t0 = time.time()
         since = lambda: round(time.time() - t0, 3)
         http = client()
         tasks: list[asyncio.Task] = []
         try:
+            if use_smart:
+                st = smart_turn()
+                if st is None:
+                    yield sse("turn", complete=True, probability=None, ms=0, available=False)
+                else:
+                    try:
+                        from smart_turn import pcm16_wav
+                        verdict = await asyncio.to_thread(st.predict, pcm16_wav(blob))
+                    except Exception:  # noqa: BLE001 — a clip the model cannot read is answered, not dropped
+                        verdict = {"complete": True, "probability": None, "ms": 0}
+                    yield sse("turn", **verdict, available=True, at=since())
+                    if not verdict["complete"]:
+                        # Not finished, by the sound of it. Wait before spending GPU on it; if you carry on,
+                        # the page cancels this request and sends the longer clip instead.
+                        await asyncio.sleep(INCOMPLETE_HOLD_S)
+            try:
+                guard(request, cost=2)
+            except HTTPException as e:
+                yield sse("error", detail=e.detail)
+                return
+            yield sse("proceed", at=since())
             r = await http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
                                   files={"file": ("clip.wav", blob, "audio/wav")})
             if r.status_code >= 400:

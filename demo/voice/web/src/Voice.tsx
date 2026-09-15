@@ -34,8 +34,8 @@ import {
 import { Transcription, TranscriptionSegment } from "@/components/ai-elements/transcription";
 import { Button } from "@/components/ui/button";
 import { Ring, type Phase } from "@/components/Ring";
-import { SILENT_WAV, createGate, BLOCK, type Sensitivity } from "@/lib/audio";
-import { createSpeaker, shapeOf, type Clip } from "@/lib/speaker";
+import { SILENT_WAV, createGate, BLOCK, PAUSE_MS, type GateEvent, type Sensitivity } from "@/lib/audio";
+import { createSpeaker, shapeOf, speechBounds, type Clip } from "@/lib/speaker";
 
 type Segment = { text: string; startSecond: number; endSecond: number };
 type Turn = {
@@ -51,9 +51,29 @@ type ModelChoice = { id: string; label: string; note: string };
 // The switches the lab panel flips. Each one is a separate experiment, so any combination is allowed.
 type ReplyMode = "eager" | "stream" | "whole";
 type FillerMode = "off" | "slow" | "quick";
-type Lab = { reply: ReplyMode; interrupt: boolean; fillers: FillerMode; endOfTurn: number };
-const LAB_DEFAULT: Lab = { reply: "eager", interrupt: true, fillers: "slow", endOfTurn: 700 };
+type BargeMode = "smart" | "instant" | "off";
+type TurnMode = "smart" | "pause";
+type TranscriptMode = "spoken" | "written";
+type Lab = {
+  reply: ReplyMode;
+  barge: BargeMode;
+  fillers: FillerMode;
+  endOfTurn: number;
+  turn: TurnMode;
+  transcript: TranscriptMode;
+};
+const LAB_DEFAULT: Lab = { reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken" };
 const FILLER_AFTER: Record<Exclude<FillerMode, "off">, number> = { quick: 250, slow: 600 };
+
+// Smart Turn, after Hugging Face speech-to-speech: a turn that sounds finished starts at once and can still be
+// reopened for a moment; one that does not waits on the server and stays reopenable for longer.
+const REOPEN_COMPLETE_MS = 800;
+const REOPEN_INCOMPLETE_MS = 2000;
+// Talking over the reply: a sound this long is an interruption without asking. Counted from when the gate
+// opened, which already took ~260 ms of voice, so this is ~0.9 s of voice in all.
+const LONG_VOICED_MS = 650;
+const BARGE_DECIDE_MS = 2500; // no verdict by then: assume you meant it
+const WATCHDOG_MS = 12_000; // the Qwen runtime's figure for "the model never started answering"
 
 /** One row of the latency table. Times are seconds from the moment the gate decided you had finished. */
 type Run = {
@@ -67,7 +87,21 @@ type Run = {
   firstSound?: number;
   filler?: number;
   total?: number;
-  outcome?: "done" | "interrupted" | "continued" | "error";
+  turnP?: number | null;
+  note?: string;
+  outcome?: "done" | "interrupted" | "continued" | "reopened" | "ignored" | "timeout" | "error";
+};
+
+/** Something you said while the Mac was talking, until we know whether it was "mm-hmm" or "stop". */
+type Barge = {
+  cur: Current;
+  checkId: number;
+  checking: boolean;
+  verdict: "" | "ignored";
+  blob?: Blob;
+  seconds?: number;
+  pendingTurn?: { blob: Blob; seconds: number };
+  timer: number;
 };
 
 /** The turn in flight: enough to cancel it cleanly and to say how far it got. */
@@ -85,6 +119,11 @@ type Current = {
   replyQueued: boolean;
   replyStarted: boolean;
   fillerTimer: number;
+  speculative: boolean;
+  committed: boolean;
+  commitTimer: number;
+  watchdog: number;
+  shown: Set<number>;
 };
 type VoiceChoice = { id: string; label: string; language: string; gender: string };
 type EngineChoice = { id: string; label: string; note: string; default: string };
@@ -124,11 +163,18 @@ const api = (input: string, init: RequestInit = {}) =>
 
 const loadLab = (): Lab => {
   try {
-    return { ...LAB_DEFAULT, ...JSON.parse(remembered("lab") ?? "{}") };
+    const saved = JSON.parse(remembered("lab") ?? "{}");
+    // The first lab had a yes/no "interrupt"; keep an explicit "no" from it.
+    if (saved.barge === undefined && saved.interrupt === false) saved.barge = "off";
+    delete saved.interrupt;
+    return { ...LAB_DEFAULT, ...saved };
   } catch {
     return LAB_DEFAULT;
   }
 };
+
+// localStorage.debug = "1" logs every speech-gate decision to the console.
+const DEBUG = remembered("debug") === "1";
 
 const b64ToBytes = (b64: string) => {
   const bin = atob(b64);
@@ -182,11 +228,15 @@ export default function Voice() {
   const speakerRef = useRef<ReturnType<typeof createSpeaker> | null>(null);
   const curRef = useRef<Current | null>(null);
   const carry = useRef("");
-  const fillerCache = useRef(new Map<string, { url: string; env: number[] | null; text: string }[]>());
+  const fillerCache = useRef(
+    new Map<string, { url: string; env: number[] | null; text: string; start?: number; end?: number }[]>()
+  );
   const lastFiller = useRef(-1);
   // Mic loudness divided by the reply's loudness, sampled while the reply plays and you are quiet: how much
   // of the Mac's own voice comes back into the microphone in this room, after the browser's echo cancelling.
   const echoRatios = useRef<number[]>([]);
+  const bargeRef = useRef<Barge | null>(null);
+  const gateHandler = useRef<(e: GateEvent) => void>(() => undefined);
 
   const push = (v: number, src: "idle" | "you" | "mac") => {
     levels.current.push(Math.max(0, Math.min(1, v)));
@@ -234,6 +284,7 @@ export default function Voice() {
 
   useEffect(() => gateRef.current?.setSensitivity(sensitivity), [sensitivity]);
   useEffect(() => gateRef.current?.setSilence(lab.endOfTurn), [lab.endOfTurn]);
+  useEffect(() => gateRef.current?.setEndMode(lab.turn), [lab.turn]);
   useEffect(() => {
     if (running) void prepareFillers(engine, voice);
   }, [engine, voice, running]);
@@ -259,17 +310,24 @@ export default function Voice() {
         start: (clip: Clip) => {
           const cur = curRef.current;
           if (!cur) return;
+          // "Heard" means the first word, not the start of the file: whatever silence is still in front of it counts.
+          const audible = Math.round((since(cur) + Math.max(0, (clip.voiceAt ?? 0) - (clip.start ?? 0))) * 100) / 100;
           if (clip.kind === "filler") {
-            updRun(cur.runId, { filler: since(cur) });
+            if (cur.replyStarted) return;
+            updRun(cur.runId, { filler: audible });
             go("speaking", "Thinking out loud");
             return;
           }
           if (!cur.replyStarted) {
             cur.replyStarted = true;
-            updRun(cur.runId, { firstSound: since(cur) });
+            updRun(cur.runId, { firstSound: audible });
+            commitTurn(cur); // the answer is being heard; carrying on now is a new turn, not this one
           }
           cur.spoken.push(clip.text);
-          go("speaking", labRef.current.interrupt ? "Speaking · talk to interrupt" : "Speaking");
+          if (clip.i !== undefined && !cur.shown.has(clip.i)) showText(cur, clip.i, clip.text);
+          if (!speakerRef.current?.ducked) {
+            go("speaking", labRef.current.barge !== "off" ? "Speaking · talk to interrupt" : "Speaking");
+          }
         },
         idle: () => {
           if (curRef.current) go("thinking", "Thinking");
@@ -293,7 +351,8 @@ export default function Voice() {
           const r = await api(`/api/filler?engine=${encodeURIComponent(forEngine)}&voice=${encodeURIComponent(forVoice)}&i=${i}`);
           if (!r.ok) throw new Error("filler");
           const bytes = await r.arrayBuffer();
-          return { text, env: await shapeOf(ctxRef.current, bytes), url: URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })) };
+          const env = await shapeOf(ctxRef.current, bytes);
+          return { text, env, ...speechBounds(env), url: URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })) };
         })
       );
       fillerCache.current.set(key, set);
@@ -302,10 +361,53 @@ export default function Voice() {
     }
   };
 
+  /** Add a sentence to the Mac's side of the transcript — as it is written, or only once it is heard. */
+  const showText = (cur: Current, i: number, text: string) => {
+    cur.shown.add(i);
+    if (!text) return;
+    if (!cur.macId) {
+      cur.macId = nextId.current++;
+      const id = cur.macId;
+      setTurns((t) => [...t, { id, who: "mac", text, meta: "" }]);
+    } else {
+      setTurn(cur.macId, (t) => ({ text: t.text ? `${t.text} ${text}` : text }));
+    }
+  };
+
+  const clearTimers = (cur: Current) => {
+    window.clearTimeout(cur.fillerTimer);
+    window.clearTimeout(cur.commitTimer);
+    window.clearTimeout(cur.watchdog);
+  };
+
+  /** A speculative turn stops being reopenable: close the gate's utterance so new speech starts a new one. */
+  const commitTurn = (cur: Current) => {
+    if (cur.committed) return;
+    cur.committed = true;
+    window.clearTimeout(cur.commitTimer);
+    const gate = gateRef.current;
+    if (!gate || !cur.speculative) return;
+    gate.commit();
+    if (curRef.current === cur) gate.setMode(labRef.current.barge === "off" ? "paused" : "barge");
+  };
+
+  /** You carried on talking before the answer began: cancel it quietly; the gate is still recording you. */
+  const reopen = (cur: Current) => {
+    cur.ctl.abort();
+    clearTimers(cur);
+    speakerRef.current?.stop();
+    curRef.current = null;
+    setTurns((ts) => ts.filter((t) => t.id !== cur.youId && t.id !== cur.macId));
+    updRun(cur.runId, { outcome: "reopened" });
+    gateRef.current?.setMode("listen");
+    go("hearing", "Hearing you · still your turn");
+  };
+
   /** You started talking over the reply (or before it began). Stop everything and keep what matters. */
   const interrupt = (cur: Current) => {
     cur.ctl.abort();
-    window.clearTimeout(cur.fillerTimer);
+    clearTimers(cur);
+    cur.committed = true;
     speakerRef.current?.stop();
     curRef.current = null;
     if (!cur.replyStarted) {
@@ -326,7 +428,7 @@ export default function Voice() {
   };
 
   const handleTurn = useCallback(
-    async (blob: Blob, seconds: number) => {
+    async (blob: Blob, seconds: number, speculative = false) => {
       const L = labRef.current;
       const gate = gateRef.current;
       const sp = speaker();
@@ -335,13 +437,37 @@ export default function Voice() {
       const cur: Current = {
         ctl: new AbortController(), tEnd: performance.now(), runId, youId: 0, macId: 0, heard: "", question: "",
         texts: {}, spoken: [], written: "", replyQueued: false, replyStarted: false, fillerTimer: 0,
+        speculative, committed: !speculative, commitTimer: 0, watchdog: 0, shown: new Set(),
       };
       curRef.current = cur;
-      gate?.setMode(L.interrupt ? "barge" : "paused");
-      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence: L.endOfTurn / 1000 }, ...rs].slice(0, 40));
+      // A speculative turn keeps the gate's utterance open so you can carry on; barge mode there only adds
+      // the echo allowance, it never throws the utterance away.
+      gate?.setMode(speculative || L.barge !== "off" ? "barge" : "paused");
+      const silence = (speculative ? PAUSE_MS : L.endOfTurn) / 1000;
+      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence }, ...rs].slice(0, 40));
       go("thinking", "Transcribing");
 
-      if (L.fillers !== "off") {
+      // The Qwen runtime's watchdog: if nothing arrives for a while, say so instead of hanging.
+      const kick = () => {
+        window.clearTimeout(cur.watchdog);
+        cur.watchdog = window.setTimeout(() => {
+          if (curRef.current !== cur) return;
+          cur.ctl.abort();
+          clearTimers(cur);
+          speakerRef.current?.stop();
+          curRef.current = null;
+          commitTurn(cur);
+          gateRef.current?.setMode("listen");
+          setError("The Mac did not answer in time. Say that again?");
+          updRun(runId, { outcome: "timeout" });
+          go("listening", "Listening");
+        }, WATCHDOG_MS);
+      };
+      kick();
+
+      const startFillerTimer = () => {
+        if (L.fillers === "off") return;
+        const wait = Math.max(0, FILLER_AFTER[L.fillers] - (performance.now() - cur.tEnd));
         cur.fillerTimer = window.setTimeout(() => {
           const set = fillerCache.current.get(`${engine}:${voice}`);
           if (curRef.current !== cur || cur.replyQueued || !set?.length || !sp) return;
@@ -349,12 +475,22 @@ export default function Voice() {
           if (k === lastFiller.current) k = (k + 1) % set.length;
           lastFiller.current = k;
           sp.enqueue({ kind: "filler", ...set[k] });
-        }, FILLER_AFTER[L.fillers]);
-      }
+        }, wait);
+      };
 
       let chain = Promise.resolve();
       const handle = (e: Record<string, any>) => {
-        if (e.type === "heard") {
+        if (curRef.current !== cur) return; // a late event from a turn that was cancelled or reopened
+        kick();
+        if (e.type === "turn") {
+          updRun(runId, { turnP: e.probability });
+          if (speculative && !cur.committed) {
+            cur.commitTimer = window.setTimeout(() => commitTurn(cur), e.complete ? REOPEN_COMPLETE_MS : REOPEN_INCOMPLETE_MS);
+          }
+          if (!e.complete) go("thinking", "Sounds like you are not finished");
+        } else if (e.type === "proceed") {
+          startFillerTimer();
+        } else if (e.type === "heard") {
           cur.heard = e.text;
           cur.question = `${carry.current} ${e.text}`.trim();
           updRun(runId, { heard: since(cur) });
@@ -366,14 +502,9 @@ export default function Voice() {
           }]);
           go("thinking", "Thinking");
         } else if (e.type === "sentence") {
+          if (Object.keys(cur.texts).length === 0) updRun(runId, { firstWords: since(cur) });
           cur.texts[e.i] = e.text;
-          if (!cur.macId) {
-            cur.macId = nextId.current++;
-            updRun(runId, { firstWords: since(cur) });
-            setTurns((t) => [...t, { id: cur.macId, who: "mac", text: e.text, meta: "" }]);
-          } else {
-            setTurn(cur.macId, (t) => ({ text: `${t.text} ${e.text}` }));
-          }
+          if (L.transcript === "written") showText(cur, e.i, e.text);
         } else if (e.type === "audio") {
           const bytes = b64ToBytes(e.mp3);
           // Decoding is async; the chain keeps sentence 3 from overtaking sentence 2.
@@ -381,7 +512,7 @@ export default function Voice() {
             const env = await shapeOf(ctxRef.current, bytes);
             if (cur.ctl.signal.aborted || !sp) return;
             cur.replyQueued = true;
-            sp.enqueue({ kind: "reply", i: e.i, text: cur.texts[e.i] ?? "", env,
+            sp.enqueue({ kind: "reply", i: e.i, text: cur.texts[e.i] ?? "", env, ...speechBounds(env),
               url: URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })) });
           });
         } else if (e.type === "written") {
@@ -396,6 +527,7 @@ export default function Voice() {
         fd.append("audio", blob, "clip.wav");
         fd.append("meta", JSON.stringify({
           mode: L.reply, model, engine, voice, seconds, carry: carry.current, history: history.current.slice(-6),
+          turn: speculative ? "smart" : "pause",
         }));
         const r = await api("/api/talk", { method: "POST", body: fd, signal: cur.ctl.signal });
         if (!r.ok || !r.body) throw new Error((await r.json().catch(() => ({}))).detail ?? `Request failed (${r.status}).`);
@@ -414,9 +546,12 @@ export default function Voice() {
           }
         }
         await chain;
+        window.clearTimeout(cur.watchdog); // everything has arrived; playing it out is not "no answer"
         // Written and synthesised; now wait for it to finish being said, unless someone talks over it.
         while (curRef.current === cur && sp?.busy) await new Promise((res) => setTimeout(res, 80));
         if (curRef.current !== cur) return;
+        // A sentence whose audio failed was never "heard"; show it anyway rather than lose it.
+        for (const [i, text] of Object.entries(cur.texts)) if (!cur.shown.has(Number(i))) showText(cur, Number(i), text);
         if (!cur.heard) {
           updRun(runId, { outcome: "done", total: since(cur) });
           return;
@@ -430,7 +565,8 @@ export default function Voice() {
         updRun(runId, { outcome: "error" });
       } finally {
         if (curRef.current === cur) {
-          window.clearTimeout(cur.fillerTimer);
+          clearTimers(cur);
+          commitTurn(cur);
           curRef.current = null;
           gateRef.current?.setMode("listen");
           if (running) go("listening", "Listening");
@@ -441,6 +577,145 @@ export default function Voice() {
   );
   const turnRef = useRef(handleTurn);
   turnRef.current = handleTurn;
+
+  // ---- Talking over the reply, the "smart" way -------------------------------------------------------------
+  // The cloud models this copies decide inside the model whether overlap is "mm-hmm" or "stop". Nothing open
+  // does that, so it is rebuilt from parts: turn the reply down at once, let the sound finish, transcribe it,
+  // and only stop for real words — or for any sound that goes on long enough to be one.
+
+  const decideBarge = (b: Barge, verdict: "interrupt" | "ignored", heard = "") => {
+    if (bargeRef.current !== b) return;
+    window.clearTimeout(b.timer);
+    const smartTurns = labRef.current.turn === "smart";
+    if (verdict === "interrupt") {
+      bargeRef.current = null;
+      if (curRef.current === b.cur) interrupt(b.cur);
+      else speakerRef.current?.duck(false);
+      const turn = b.pendingTurn ?? (smartTurns && b.blob ? { blob: b.blob, seconds: b.seconds ?? 0 } : null);
+      if (turn) void turnRef.current(turn.blob, turn.seconds, smartTurns);
+      return;
+    }
+    b.verdict = "ignored";
+    speakerRef.current?.duck(false);
+    const rid = nextId.current++;
+    setRuns((rs) => [{ id: rid, reply: labRef.current.reply, model, engine, silence: 0, outcome: "ignored" as const,
+      note: heard || "(noise)", turnP: null }, ...rs].slice(0, 40));
+    if (curRef.current) go("speaking", "Speaking · talk to interrupt");
+    // The sound has ended: forget it. In pause mode the gate closes it itself a moment later.
+    if (b.pendingTurn || (smartTurns && b.blob)) {
+      if (smartTurns) gateRef.current?.commit();
+      bargeRef.current = null;
+    }
+  };
+
+  const checkBarge = (b: Barge) => {
+    if (!b.blob) return;
+    const id = ++b.checkId;
+    b.checking = true;
+    const fd = new FormData();
+    fd.append("audio", b.blob, "clip.wav");
+    api("/api/backchannel", { method: "POST", body: fd })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => b.checkId === id && decideBarge(b, d.verdict === "interrupt" ? "interrupt" : "ignored", d.text))
+      .catch(() => b.checkId === id && decideBarge(b, "interrupt"));
+  };
+
+  gateHandler.current = (e: GateEvent) => {
+    const gate = gateRef.current;
+    const sp = speakerRef.current;
+    if (!gate) return;
+    if (DEBUG && e.type !== "level") {
+      const c = curRef.current;
+      console.log(`[gate] ${e.type} mode=${gate.mode} speaking=${gate.speaking} voiced=${gate.voicedMs.toFixed(0)}`
+        + ` cur=${c ? `${c.runId}${c.speculative ? " spec" : ""}${c.committed ? " committed" : ""}` : "-"} barge=${bargeRef.current ? bargeRef.current.verdict || "pending" : "-"}`);
+    }
+    const L = labRef.current;
+    if (e.type === "level") {
+      const playing = sp?.busy && sp.playingKind;
+      if (playing && !e.speaking) {
+        push(sp.level() * 3.2, "mac");
+        const peak = sp.recentPeak();
+        if (gate.mode === "barge" && peak > 0.03 && !sp.ducked) {
+          echoRatios.current.push(e.rms / peak);
+          if (echoRatios.current.length > 120) echoRatios.current.shift();
+        }
+      } else {
+        push(e.normalised, e.speaking ? "you" : "idle");
+      }
+      threshold.current = gate.threshold / (gate.floor * 9 || 1);
+      const b = bargeRef.current;
+      if (b && gate.speaking && gate.voicedMs > LONG_VOICED_MS) decideBarge(b, "interrupt");
+      return;
+    }
+    if (e.type === "open") {
+      const cur = curRef.current;
+      if (cur && gate.mode === "barge") {
+        if (L.barge === "instant") {
+          interrupt(cur);
+        } else if (L.barge === "smart") {
+          const b: Barge = { cur, checkId: 0, checking: false, verdict: "", timer: 0 };
+          b.timer = window.setTimeout(() => decideBarge(b, "interrupt"), BARGE_DECIDE_MS);
+          bargeRef.current = b;
+          sp?.duck(true);
+          go("hearing", "Hearing you · the reply is turned down");
+          return;
+        }
+      }
+      go("hearing", "Hearing you");
+      return;
+    }
+    if (e.type === "pause") {
+      const b = bargeRef.current;
+      if (b) {
+        if (b.verdict === "ignored") {
+          if (L.turn === "smart") gate.commit();
+          bargeRef.current = null;
+        } else if (!b.checking) {
+          b.blob = e.blob;
+          b.seconds = e.seconds;
+          checkBarge(b);
+        }
+        return;
+      }
+      if (L.turn === "smart" && !curRef.current) void turnRef.current(e.blob, e.seconds, true);
+      return;
+    }
+    if (e.type === "resume") {
+      const b = bargeRef.current;
+      if (b) {
+        // The sound carried on: whatever the short clip was judged to be no longer applies.
+        b.checkId++;
+        b.checking = false;
+        b.blob = undefined;
+        if (b.verdict === "ignored") {
+          b.verdict = "";
+          window.clearTimeout(b.timer);
+          b.timer = window.setTimeout(() => decideBarge(b, "interrupt"), BARGE_DECIDE_MS);
+          sp?.duck(true);
+        }
+        return;
+      }
+      const cur = curRef.current;
+      if (cur?.speculative && !cur.committed) reopen(cur);
+      return;
+    }
+    if (e.type === "turn") {
+      const b = bargeRef.current;
+      if (b) {
+        if (b.verdict === "ignored") {
+          bargeRef.current = null;
+          return;
+        }
+        b.pendingTurn = { blob: e.blob, seconds: e.seconds };
+        if (!b.checking) {
+          b.blob = e.blob;
+          checkBarge(b);
+        }
+        return;
+      }
+      if (L.turn !== "smart") void turnRef.current(e.blob, e.seconds, false);
+    }
+  };
 
   const start = async () => {
     setError(null);
@@ -478,30 +753,11 @@ export default function Voice() {
     if (ctx.state === "suspended") await ctx.resume().catch(() => undefined);
 
     const sp = speaker();
-    const gate = createGate(ctx.sampleRate, (e) => {
-      if (e.type === "level") {
-        const playing = sp?.busy && sp.playingKind;
-        if (playing && !e.speaking) {
-          push(sp.level() * 3.2, "mac");
-          const peak = sp.recentPeak();
-          if (gate.mode === "barge" && peak > 0.03) {
-            echoRatios.current.push(e.rms / peak);
-            if (echoRatios.current.length > 120) echoRatios.current.shift();
-          }
-        } else {
-          push(e.normalised, e.speaking ? "you" : "idle");
-        }
-        threshold.current = gate.threshold / (gate.floor * 9 || 1);
-      } else if (e.type === "open") {
-        // Opening while the reply is in flight means you talked over it.
-        if (curRef.current && gate.mode === "barge") interrupt(curRef.current);
-        go("hearing", "Hearing you");
-      } else if (e.type === "turn") {
-        void turnRef.current(e.blob, e.seconds);
-      }
-    });
+    // Every gate event goes through a ref, so the handler always sees the current lab settings and voice.
+    const gate = createGate(ctx.sampleRate, (e) => gateHandler.current(e));
     gate.setSensitivity(sensitivity);
     gate.setSilence(labRef.current.endOfTurn);
+    gate.setEndMode(labRef.current.turn);
     gate.setEcho(() => {
       // Until the room has been heard for a moment, assume a fair amount of echo: better to be a little hard
       // to interrupt at first than to have the Mac cut itself off with its own voice.
@@ -530,8 +786,12 @@ export default function Voice() {
     setRunning(false);
     if (curRef.current) {
       curRef.current.ctl.abort();
-      window.clearTimeout(curRef.current.fillerTimer);
+      clearTimers(curRef.current);
       curRef.current = null;
+    }
+    if (bargeRef.current) {
+      window.clearTimeout(bargeRef.current.timer);
+      bargeRef.current = null;
     }
     speakerRef.current?.stop();
     nodeRef.current?.disconnect();
@@ -753,9 +1013,18 @@ export default function Voice() {
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
               Talking over the reply
               <select aria-label="Interrupt" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
-                onChange={(e) => setLab({ interrupt: e.target.value === "on" })} value={lab.interrupt ? "on" : "off"}>
-                <option value="on">Interrupts it</option>
+                onChange={(e) => setLab({ barge: e.target.value as BargeMode })} value={lab.barge}>
+                <option value="smart">Smart · turns it down, stops only for real words</option>
+                <option value="instant">Stops it instantly</option>
                 <option value="off">Is ignored until it finishes</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
+              How it knows you are done
+              <select aria-label="Turn detection" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
+                onChange={(e) => setLab({ turn: e.target.value as TurnMode })} value={lab.turn}>
+                <option value="smart">Smart Turn model · listens to how you stopped</option>
+                <option value="pause">A pause of fixed length</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
@@ -768,12 +1037,20 @@ export default function Voice() {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
-              Pause that ends your turn
-              <select aria-label="End of turn" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
+              Pause that ends your turn{lab.turn === "smart" ? " · pause mode only" : ""}
+              <select aria-label="End of turn" disabled={lab.turn === "smart"} className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
                 onChange={(e) => setLab({ endOfTurn: Number(e.target.value) })} value={lab.endOfTurn}>
                 <option value={450}>0.45 s · snappy, may cut you off</option>
                 <option value={700}>0.7 s · default</option>
                 <option value={1000}>1 s · patient</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
+              The Mac's words appear
+              <select aria-label="Transcript" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
+                onChange={(e) => setLab({ transcript: e.target.value as TranscriptMode })} value={lab.transcript}>
+                <option value="spoken">As they are spoken</option>
+                <option value="written">As they are written</option>
               </select>
             </label>
           </div>
@@ -788,6 +1065,7 @@ export default function Voice() {
                   <tr>
                     <th className="py-1 pr-3 font-normal">mode</th>
                     <th className="py-1 pr-3 font-normal">engine</th>
+                    <th className="py-1 pr-3 font-normal">done?</th>
                     <th className="py-1 pr-3 font-normal">heard</th>
                     <th className="py-1 pr-3 font-normal">words</th>
                     <th className="py-1 pr-3 font-normal">filler</th>
@@ -803,12 +1081,13 @@ export default function Voice() {
                       <tr className="border-t" key={r.id}>
                         <td className="py-1 pr-3">{r.reply}</td>
                         <td className="py-1 pr-3">{r.engine.replace("-tts", "").replace("-realtime", "")}</td>
+                        <td className="py-1 pr-3">{r.turnP === undefined ? "pause" : r.turnP === null ? "n/a" : r.turnP.toFixed(2)}</td>
                         <td className="py-1 pr-3">{r.heard?.toFixed(2) ?? "…"}</td>
                         <td className="py-1 pr-3">{r.firstWords?.toFixed(2) ?? "…"}</td>
                         <td className="py-1 pr-3">{r.filler?.toFixed(2) ?? "–"}</td>
                         <td className="py-1 pr-3 text-primary">{r.firstSound?.toFixed(2) ?? "…"}</td>
                         <td className="py-1 pr-3">{firstHeard < 99 ? (firstHeard + r.silence).toFixed(2) : "…"}</td>
-                        <td className="py-1">{r.outcome ?? "…"}</td>
+                        <td className="py-1">{r.outcome ?? "…"}{r.note ? ` "${r.note}"` : ""}</td>
                       </tr>
                     );
                   })}
