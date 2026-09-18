@@ -289,7 +289,14 @@ a machine that cannot recover should page a person, not loop.
 ```sh
 ./scripts/colima-doctor.sh --check                      # what it sees, changes nothing
 NTFY_URL= COLIMA_DOCTOR_FORCE="drill" COLIMA_DOCTOR_DRY=1 ./scripts/colima-doctor.sh   # rehearse
+COLIMA_DOCTOR_STATE=$(mktemp -d) COLIMA_DOCTOR_FORCE="drill" ./scripts/colima-doctor.sh  # the real thing
 ```
+
+A drill forces only the first diagnosis; the restart and the check afterwards are real, or it proves
+nothing. **Run for real on 2026-09-18:** 60 s end to end, `voice.jfay.dev` returned non-200 for **40 s**,
+all 16 containers came back, and `captcha-pg` — which has no restart policy and stayed down after the real
+outage in September — was started by the script. A drill uses a throwaway state directory so it does not
+spend the cooldown that a genuine failure needs.
 
 One bug worth keeping in mind, found while testing it: `colima status | grep -q running` is wrong.
 `grep -q` exits at the first match, colima dies of SIGPIPE, and under `pipefail` the check reads as

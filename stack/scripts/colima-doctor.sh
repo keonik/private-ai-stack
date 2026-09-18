@@ -81,6 +81,9 @@ notify "colima restarting" "$BROKEN. Restarting colima; services will be down fo
 [ "$DRY" = 1 ] && { say "dry run: would restart colima, then restore: $WERE"; exit 0; }
 
 echo "$now" > "$LAST"
+# A drill forces the first diagnosis only: everything from here — the restart, what comes back, and the
+# check at the end — has to be real, or the rehearsal proves nothing.
+unset COLIMA_DOCTOR_FORCE
 colima restart 2>&1 | tail -3
 for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 2; done
 
