@@ -38,8 +38,6 @@ model_list:
 
   # Everything else oMLX serves, under its own name, so a client that already calls the engine
   # directly keeps working when the public gateway is pointed at this router instead.
-  - model_name: gpt-oss-20b-mlx
-    litellm_params: { model: openai/gpt-oss-20b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # The MoE that replaced Qwen3.8-27B as local/chat and local/chat-code: ~3B
   # active parameters, 5x the decode (150 vs 29 tok/s) and 7x the prefill, and
   # no worse on 707 mechanically-checked items (82.9% vs 81.8%: code 90.8 = 90.8,
@@ -71,8 +69,6 @@ model_list:
     litellm_params: { model: openai/z-image-turbo, api_base: "http://host.docker.internal:8095/v1", api_key: "none" }
     model_info: { mode: image_generation }
 
-  - model_name: phi4-mini
-    litellm_params: { model: openai/phi4-mini, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
 
   # Speech. mode lets `/health` check them correctly instead of sending a chat probe.
   - model_name: local/tts
