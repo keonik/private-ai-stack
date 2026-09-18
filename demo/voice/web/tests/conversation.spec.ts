@@ -57,17 +57,19 @@ test("a spoken question is answered, streamed, and timed", async () => {
 
 test("talking over the reply stops it and answers the new question", async () => {
   test.setTimeout(150_000);
-  const { browser, page } = await open("barge", { reply: "eager", barge: "smart", fillers: "words", endOfTurn: 700, turn: "smart", transcript: "spoken" });
+  const { browser, page } = await open("barge", { reply: "eager", barge: "smart", fillers: "off", endOfTurn: 700, turn: "smart", transcript: "spoken" });
+  const dump = async (why: string) => {
+    console.log(why, "rows:", await rows(page).evaluateAll((trs) => trs.map((tr) => tr.textContent)));
+    console.log(why, "transcript:", await page.locator("article").allTextContents());
+  };
   try {
     await page.getByRole("button", { name: /start conversation/i }).click();
-    // Generous: a long story plus a cold model can push a real interruption past 20 s.
     await expect(page.getByText(/interrupted|continued/).first()).toBeVisible({ timeout: 45_000 });
-    // Spoken fillers put a clip in front of every answer, so the second turn lands later than it looks.
     await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 60_000 });
-    const all = await rows(page).evaluateAll((trs) => trs.map((tr) => tr.textContent));
-    console.log("barge rows:", all);
-    const turns = await page.locator("article").allTextContents();
-    console.log("transcript:", turns);
+    await dump("passed");
+  } catch (e) {
+    await dump("FAILED");
+    throw e;
   } finally {
     await browser.close();
   }
