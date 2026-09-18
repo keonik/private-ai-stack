@@ -680,9 +680,13 @@ export default function Voice() {
     b.checking = true;
     const fd = new FormData();
     fd.append("audio", b.blob, "clip.wav");
+    // What the Mac is saying, so its own voice coming back through the speakers can be recognised as echo
+    // rather than as someone talking over it.
+    fd.append("said", Object.values(b.cur.texts).join(" ").slice(0, 2000));
     api("/api/backchannel", { method: "POST", body: fd })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d) => b.checkId === id && decideBarge(b, d.verdict === "interrupt" ? "interrupt" : "ignored", d.text))
+      .then((d) => b.checkId === id
+        && decideBarge(b, d.verdict === "interrupt" ? "interrupt" : "ignored", d.verdict === "echo" ? "its own voice" : d.text))
       .catch(() => b.checkId === id && decideBarge(b, "interrupt"));
   };
 
@@ -851,7 +855,9 @@ export default function Voice() {
       // to interrupt at first than to have the Mac cut itself off with its own voice.
       const r = [...echoRatios.current].sort((a, b) => a - b);
       const coupling = r.length >= 10 ? r[Math.floor(r.length * 0.75)] : 0.25;
-      return coupling * (sp?.recentPeak() ?? 0);
+      // A room that sends a lot of the reply back — laptop speakers rather than headphones — needs a wider
+      // gap before a sound counts as you, or the Mac keeps interrupting itself.
+      return coupling * (sp?.recentPeak() ?? 0) * (coupling > 0.3 ? 1.8 : 1);
     });
     gateRef.current = gate;
     if (labRef.current.fillers === "words") void prepareFillers(engine, voice);

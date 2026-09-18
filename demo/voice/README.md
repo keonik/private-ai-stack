@@ -168,6 +168,14 @@ than pulling in `transformers`, and matches it to within 1.2e-7. On synthetic sp
 complete/unfinished phrases correctly; both misses were unfinished sentences Kokoro read with a final,
 falling intonation.
 
+**The Mac hearing itself.** On laptop speakers the reply leaks back into the microphone, the browser's echo
+cancelling does not always catch it, and transcribing that leak returns real words — so the demo kept
+interrupting itself, with a transcript of something nobody said. The answer's own words are known, so the
+check now compares what it heard against what the Mac is saying: **60% or more of the words already in the
+reply means echo**, not you. It stays sensitive to a real interruption that happens to share words
+("tell me about the storm" during a story about a storm), and `verdict_test.py` pins the rules down. A room
+that returns a lot of the reply also widens the gap a sound has to clear before it counts as speech at all.
+
 **Talking over the reply — smart.** The reply is turned down to 30% the moment you make a sound (iOS
 ignores `volume` on media elements, so there it pauses instead). More than ~0.9 s of voice is an
 interruption without asking. Anything shorter is transcribed once it ends and only stops the reply if it

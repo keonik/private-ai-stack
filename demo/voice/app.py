@@ -233,10 +233,19 @@ BACKCHANNELS = {"mm", "mmm", "hmm", "hm", "mhm", "mm-hmm", "mmhmm", "uh-huh", "u
                 "gotcha", "true", "exactly", "totally", "i", "see", "got", "it", "alright", "aha"}
 
 
-def backchannel_verdict(text: str) -> str:
+def backchannel_verdict(text: str, said: str = "") -> str:
+    """What was that sound: the Mac's own voice coming back, "mm-hmm", noise, or someone interrupting?"""
     words = re.findall(r"[a-z]+(?:-[a-z]+)?", text.lower())
     if not words:
         return "ambient"
+    # Echo first. On laptop speakers the reply leaks into the microphone, the browser's echo cancelling does
+    # not always catch it, and transcribing that leak gives real words — which looked exactly like someone
+    # talking over the answer. The answer's own words are known here, so a "sound" made of them is the Mac.
+    mine = set(re.findall(r"[a-z]+(?:-[a-z]+)?", said.lower()))
+    if mine and len(words) >= 2:
+        overlap = sum(1 for w in words if w in mine) / len(words)
+        if overlap >= 0.6:
+            return "echo"
     if len(words) <= 3 and all(w in BACKCHANNELS for w in words):
         return "backchannel"
     return "interrupt"
@@ -578,9 +587,10 @@ async def filler(request: Request, voice: str = Query(...), i: int = Query(0),
 
 
 @app.post("/api/backchannel")
-async def backchannel(request: Request, audio: UploadFile) -> JSONResponse:
-    """Was that sound, made while the Mac was talking, an interruption or just "mm-hmm"?"""
+async def backchannel(request: Request, audio: UploadFile, said: str = Form("")) -> JSONResponse:
+    """Was that sound, made while the Mac was talking, an interruption, its own echo, or just "mm-hmm"?"""
     guard(request)
+    said = said[:2000]
     blob = await audio.read()
     if len(blob) > MAX_AUDIO_BYTES // 8:
         return JSONResponse({"verdict": "interrupt", "text": "", "reason": "long"})
@@ -588,8 +598,9 @@ async def backchannel(request: Request, audio: UploadFile) -> JSONResponse:
     r = await upstream("POST", "/audio/transcriptions", files={"file": ("clip.wav", blob, "audio/wav")},
                        data={"model": STT_MODEL})
     text = (r.json().get("text") or "").strip()
-    count("voice_backchannel_total", backchannel_verdict(text))
-    return JSONResponse({"verdict": backchannel_verdict(text), "text": text, "seconds": round(time.time() - t0, 3)})
+    verdict = backchannel_verdict(text, said)
+    count("voice_backchannel_total", verdict)
+    return JSONResponse({"verdict": verdict, "text": text, "seconds": round(time.time() - t0, 3)})
 
 
 ENUMS = {"reply": {"eager", "stream", "whole"}, "turn": {"smart", "pause"}, "barge": {"smart", "instant", "off"},
