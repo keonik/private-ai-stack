@@ -78,6 +78,18 @@ services:
       RAG_EMBEDDING_MODEL: ${EMBED_MODEL:-local/embed}
       ENABLE_COMMUNITY_SHARING: "False"
       ENABLE_ADMIN_EXPORT: "False"
+      # Image generation, also through LiteLLM (z-image-turbo, served by mflux on
+      # the host as launchd job local.mlx-image). These only SEED a fresh
+      # webui.db: once a setting has been saved, the persisted row wins over the
+      # environment. An existing install had api.openai.com persisted as the
+      # image base URL from first boot, so it needed its config rows updated —
+      # setting these alone would have silently changed nothing.
+      ENABLE_IMAGE_GENERATION: "True"
+      IMAGE_GENERATION_ENGINE: openai
+      IMAGES_OPENAI_API_BASE_URL: http://litellm:4000/v1
+      IMAGES_OPENAI_API_KEY: ${LITELLM_MASTER_KEY}
+      IMAGE_GENERATION_MODEL: z-image-turbo
+      IMAGE_SIZE: 1024x1024
     volumes:
       - open_webui_data:/app/backend/data
     ports:

@@ -50,6 +50,15 @@ model_list:
     litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: embedding }
 
+  # Image generation. oMLX does not serve diffusion image models, so this goes to
+  # mlx-openai-server (mflux) on the host, launchd job local.mlx-image. It runs
+  # natively for the same reason oMLX does — the colima VM cannot reach Metal —
+  # and outside oMLX's memory guard, which therefore cannot see its ~10 GB.
+  # Z-Image-Turbo: Apache-2.0 and ungated, so no HF account is needed to rebuild.
+  - model_name: z-image-turbo
+    litellm_params: { model: openai/z-image-turbo, api_base: "http://host.docker.internal:8095/v1", api_key: "none" }
+    model_info: { mode: image_generation }
+
   # Vision. oMLX serves these and they were the one family missing from the list
   # above, so a client that pointed at the engine directly lost them the moment
   # the public gateway was flipped to this router. captcha-api reads images with
