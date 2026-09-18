@@ -71,21 +71,6 @@ model_list:
     litellm_params: { model: openai/z-image-turbo, api_base: "http://host.docker.internal:8095/v1", api_key: "none" }
     model_info: { mode: image_generation }
 
-  # Vision. oMLX serves these and they were the one family missing from the list
-  # above, so a client that pointed at the engine directly lost them the moment
-  # the public gateway was flipped to this router. captcha-api reads images with
-  # a panel of them and needs at least two to produce a confidence score at all.
-  - model_name: qwen2.5-vl-7b
-    litellm_params: { model: openai/qwen2.5-vl-7b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  - model_name: qwen3-vl-4b
-    litellm_params: { model: openai/qwen3-vl-4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  - model_name: qwen3-vl-8b
-    litellm_params: { model: openai/qwen3-vl-8b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-
-  - model_name: qwen3.5-9b
-    litellm_params: { model: openai/qwen3.5-9b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  - model_name: qwen3.5-4b
-    litellm_params: { model: openai/qwen3.5-4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: phi4-mini
     litellm_params: { model: openai/phi4-mini, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
 
