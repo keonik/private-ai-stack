@@ -77,12 +77,17 @@ Measured through LiteLLM on an M4 Max, thinking off, 200 generated tokens:
 |---|---|---|
 | `local/chat-small` | oMLX · gemma4-e4b (4B-class, VLM) | 89 |
 | `ollama/chat-small` | Ollama · qwen3:4b | 127 |
-| `local/chat` | oMLX · Qwen3.8-27B nvfp4 (`qwen3.8-27b-coder`) | 29 |
+| `local/chat` | oMLX · Qwen3.6-35B-A3B MoE + MTP (`qwen3.6-35b-a3b`) | 150 |
 | `ollama/chat` | Ollama · qwen3:8b | 77 |
 
 Read carefully: these are different models, not the same model on two engines.
-The 27B is ~3× the parameters of the 8B and materially stronger on extraction
-and grounded answers; 28 tok/s for a 27B on a laptop-class chip is the headline.
+`local/chat` was a dense Qwen3.8-27B at 28–29 tok/s until 2026-09-18. It was
+replaced by the Qwen3.6-35B-A3B MoE: ~3B active parameters per token, so it
+decodes at 150 tok/s with MTP (5×) and prefills 8k tokens in 4.4 s against 31.7 s
+(7×). On 707 mechanically-checked items it was no worse — code 90.8% = 90.8%,
+math 96.0% = 96.0%, MMLU-Pro 67.3% vs 64.6% (p=0.27) — so the dense model was
+retired. MTP helps the MoE only: on the dense 27B it measured 26% *slower*, its
+verify pass being too expensive. Harness: offbyone-ai/benchmarks `llm-quality/`.
 On the 4B row Ollama is faster, but it is a different architecture. A same-model
 bake-off is the honest next measurement.
 

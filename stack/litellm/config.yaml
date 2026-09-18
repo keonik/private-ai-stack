@@ -12,7 +12,7 @@ model_list:
   # ---------------- oMLX (Apple Silicon primary) ----------------
   - model_name: local/chat
     litellm_params:
-      model: openai/qwen3.8-27b-coder
+      model: openai/qwen3.6-35b-a3b
       api_base: os.environ/OMLX_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/chat-small
@@ -22,7 +22,7 @@ model_list:
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/chat-code
     litellm_params:
-      model: openai/qwen3.8-27b-coder
+      model: openai/qwen3.6-35b-a3b
       api_base: os.environ/OMLX_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/embed
@@ -40,16 +40,22 @@ model_list:
   # directly keeps working when the public gateway is pointed at this router instead.
   - model_name: gpt-oss-20b-mlx
     litellm_params: { model: openai/gpt-oss-20b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  # Alias, not a model. This was a second copy of the same Qwen3.8-27B (affine
-  # int4 g64, where qwen3.8-27b-coder is nvfp4 g16), and a local/chat request
-  # would load it alongside the pinned copy — 30 GB resident for one model. The
-  # name stays because demo/voice and older clients still ask for it.
+  # The MoE that replaced Qwen3.8-27B as local/chat and local/chat-code: ~3B
+  # active parameters, 5x the decode (150 vs 29 tok/s) and 7x the prefill, and
+  # no worse on 707 mechanically-checked items (82.9% vs 81.8%: code 90.8 = 90.8,
+  # math 96.0 = 96.0, MMLU-Pro 67.3 vs 64.6 at p=0.27). MTP on, thinking off.
+  # Harness and results: offbyone-ai/benchmarks, llm-quality/.
+  - model_name: qwen3.6-35b-a3b
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+
+  # Retired names, kept as aliases to the replacement so a client asking for
+  # them gets an answer rather than a 404. Neither 27B build is served any more:
+  # Qwen3.8-27B-4bit was a duplicate copy, qwen3.8-27b-coder was dropped for the
+  # MoE above. demo/voice still offers Qwen3.8-27B-4bit by name.
   - model_name: Qwen3.8-27B-4bit
-    litellm_params: { model: openai/qwen3.8-27b-coder, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  - model_name: gemma4-e4b-mlx
-    litellm_params: { model: openai/gemma4-e4b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder
-    litellm_params: { model: openai/qwen3.8-27b-coder, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: embeddinggemma-300m
     litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: embedding }
