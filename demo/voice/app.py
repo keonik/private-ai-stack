@@ -46,12 +46,11 @@ CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.6-35b-a3b")
 #
 # The MoE activates ~3B parameters per token, so it answers as fast as a 4B model while being the
 # model that tied a dense 27B on 707 checked items (benchmarks repo, llm-quality/). It is pinned on
-# the engine, so the first visitor after a quiet spell no longer waits for a cold load. The 9B, 4B and
-# Qwen3-VL-4B were retired from the engine the same day.
+# the engine, so the first visitor after a quiet spell no longer waits for a cold load. The 9B, 4B,
+# Qwen3-VL-4B, GPT-OSS 20B and Phi-4-mini were retired from the engine the same day.
 #
 # From 2026-09-13, same "median of four questions" method as before:
 #   gemma4-e4b     0.61 s   nothing needed          terse; the original "odd helpfulness" complaint
-#   gpt-oss-20b    2.5 s    reasoning_effort=low    else thinking eats the budget and content is empty
 #
 # Every Qwen generation here ships thinking ON by default and writes it into `content`, not
 # `reasoning_content` — so without the flag the assistant literally reads "Thinking Process: 1. Analyze
@@ -62,8 +61,6 @@ CHAT_CHOICES = [
     {"id": "qwen3.6-35b-a3b",  "label": "Qwen3.6 35B MoE", "note": "best answers, ~0.7 s",
      "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
     {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",     "note": "~0.6 s, terse",     "extra": {}},
-    {"id": "gpt-oss-20b-mlx",  "label": "GPT-OSS 20B",     "note": "~2.5 s, reasons",
-     "extra": {"reasoning_effort": "low"}},
 ]
 CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}
 TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")

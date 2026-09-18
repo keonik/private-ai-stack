@@ -249,7 +249,7 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 
 ## Models, and why each needs a different flag
 
-Three models in the picker. The default changed on 2026-09-18 to a mixture-of-experts model: same
+Two models in the picker. The default changed on 2026-09-18 to a mixture-of-experts model: same
 harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
 
 | model | first word | full turn | flag it needs |
@@ -259,14 +259,13 @@ harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
 
 It activates ~3B parameters per token, so it turns around as fast as a 4B model while being the model
 that tied a dense 27B on 707 mechanically checked items. It is also pinned on the engine, so a quiet
-spell no longer ends in a cold load for the next visitor. The other two, from the 2026-09-13 run (median
+spell no longer ends in a cold load for the next visitor. The other, from the 2026-09-13 run (median
 of four questions: a capability question, one to refuse, a recall of the previous turn, a plain
 explanation):
 
 | model | median | flag it needs | without the flag |
 |---|---|---|---|
 | Gemma 4 E4B | 0.61 s | none | — |
-| GPT-OSS 20B | ~2.5 s | `reasoning_effort: low` | thinking eats the budget; content comes back empty |
 
 **Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`.** That
 one fact explains most of what looks like a model being strange out loud. Two other fixes live here:
@@ -276,7 +275,7 @@ cleanly rather than narrating deliberation.
 
 **Measured and rejected.** Phi-4-mini is quick (0.55 s) and was the only model to get a plain recall
 question wrong, answering what it was rather than what it had just been told. Qwen3.5 4B/9B, Qwen3 VL
-4B and the dense Qwen3.8 27B were in the picker until 2026-09-18 and are gone from the engine; a stale
+4B, GPT-OSS 20B and the dense Qwen3.8 27B were in the picker until 2026-09-18 and are gone from the engine; a stale
 choice from an open tab falls back to the default rather than failing.
 
 ## Voices
