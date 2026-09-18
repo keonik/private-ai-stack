@@ -111,7 +111,16 @@ class App:
         if len(ref) >= 7 and all(ch in "0123456789abcdef" for ch in ref.lower()):
             self.fetch()
             return run(["git", "-C", str(self.mirror), "rev-parse", ref]).stdout.strip()
-        out = run(["git", "ls-remote", self.repo, ref], timeout=60).stdout.split()
+        # One blip on a home connection should not look like a failed deploy check, so it is tried twice.
+        for attempt in (1, 2):
+            try:
+                out = run(["git", "ls-remote", self.repo, ref], timeout=120).stdout.split()
+                break
+            except (subprocess.TimeoutExpired, RuntimeError) as e:
+                if attempt == 2:
+                    raise
+                log(f"{self.name}: git ls-remote {e.__class__.__name__}, retrying")
+                time.sleep(5)
         if not out:
             raise RuntimeError(f"{self.repo} has no ref {ref}")
         return out[0]

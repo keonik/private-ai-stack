@@ -56,12 +56,13 @@ test("a spoken question is answered, streamed, and timed", async () => {
 });
 
 test("talking over the reply stops it and answers the new question", async () => {
-  test.setTimeout(45_000);
+  test.setTimeout(90_000);
   const { browser, page } = await open("barge", { reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken" });
   try {
     await page.getByRole("button", { name: /start conversation/i }).click();
-    await expect(page.getByText(/interrupted|continued/).first()).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 20_000 });
+    // Generous: a long story plus a cold model can push a real interruption past 20 s.
+    await expect(page.getByText(/interrupted|continued/).first()).toBeVisible({ timeout: 35_000 });
+    await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 35_000 });
     const all = await rows(page).evaluateAll((trs) => trs.map((tr) => tr.textContent));
     console.log("barge rows:", all);
     const turns = await page.locator("article").allTextContents();
