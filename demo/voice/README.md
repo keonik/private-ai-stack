@@ -178,7 +178,9 @@ interruptions. The word list and durations are this project's heuristics, not a 
 
 **The Mac's words appear as they are spoken**, not as they are written, so an interrupted answer never shows
 text you did not hear. **Late events from a cancelled turn are dropped**, and **a 12 s watchdog** says
-"say that again" instead of hanging.
+"say that again" instead of hanging — but it only counts time when nothing is being said. Counting any gap
+between events killed healthy turns on a loaded machine, where one Qwen3-TTS sentence can take 8 s to
+synthesise while the previous one is still playing.
 
 **Engine silence is skipped at playback.** Kokoro pads every clip with ~0.4 s of silence before the first
 word and 0.5-0.7 s after the last. The page already decodes each clip to draw it, so it now starts at the
