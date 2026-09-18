@@ -49,11 +49,18 @@ model_list:
   # Retired names, kept as aliases to the replacement so a client asking for
   # them gets an answer rather than a 404. Neither 27B build is served any more:
   # Qwen3.8-27B-4bit was a duplicate copy, qwen3.8-27b-coder was dropped for the
-  # MoE above. demo/voice still offers Qwen3.8-27B-4bit by name.
+  # MoE above. The demo no longer offers either by name; these stay for anything
+  # else that still asks for them.
   - model_name: Qwen3.8-27B-4bit
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: us-gemma4-26b-a4b
+    litellm_params: { model: openai/us-gemma4-26b-a4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: us-nemotron-30b-a3b
+    litellm_params: { model: openai/us-nemotron-30b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  - model_name: us-gpt-oss-120b
+    litellm_params: { model: openai/us-gpt-oss-120b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: gemma4-e4b-mlx
     litellm_params: { model: openai/gemma4-e4b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: embeddinggemma-300m

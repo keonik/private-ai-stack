@@ -37,30 +37,26 @@ STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.6-35b-a3b")
 
 # Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
-# reasoning aloud.
+# reasoning aloud. Median of voice-shaped questions, measured 2026-09-18 on a machine that was also running
+# something heavy — the ranking holds, the absolute numbers are pessimistic:
 #
-# 2026-09-18, one harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
+#   qwen3.6-35b-a3b      0.71 s   enable_thinking=false   35B MoE, ~3B active: the best answers per second here
+#   us-nemotron-30b-a3b  0.79 s   enable_thinking=false   0.97 s without the flag, and it reasons in the open
+#   gemma4-e4b-mlx       1.25 s   nothing needed          terse
+#   us-gemma4-26b-a4b    1.56 s   nothing needed
 #
-#   qwen3.6-35b-a3b  first word 0.26 s   full turn 0.70 s   185 tok/s   enable_thinking=false
-#   qwen3.5-9b       first word 0.26 s   full turn 1.07 s    99 tok/s   (the previous default)
-#
-# The MoE activates ~3B parameters per token, so it answers as fast as a 4B model while being the
-# model that tied a dense 27B on 707 checked items (benchmarks repo, llm-quality/). It is pinned on
-# the engine, so the first visitor after a quiet spell no longer waits for a cold load. The 9B, 4B,
-# Qwen3-VL-4B, GPT-OSS 20B and Phi-4-mini were retired from the engine the same day.
-#
-# From 2026-09-13, same "median of four questions" method as before:
-#   gemma4-e4b     0.61 s   nothing needed          terse; the original "odd helpfulness" complaint
-#
-# Every Qwen generation here ships thinking ON by default and writes it into `content`, not
-# `reasoning_content` — so without the flag the assistant literally reads "Thinking Process: 1. Analyze
-# the Request" aloud. The engine also sets enable_thinking=false for the MoE server-side; the flag
-# stays here so the picker does not depend on that. Phi-4-mini was measured too (0.55 s) and left out:
-# it was the only model that got a plain recall question wrong.
+# Every Qwen generation ships thinking ON and writes it into `content`, not `reasoning_content` — so without
+# the flag the assistant literally reads "Thinking Process: 1. Analyze the Request" aloud. Nemotron is the
+# same. Left out: us-gpt-oss-120b, which oMLX refuses to load beside the voice models ("projected memory
+# 103 GB would exceed the dynamic ceiling"), and the retired 27B builds, whose names the gateway still
+# answers by routing them to the MoE.
 CHAT_CHOICES = [
-    {"id": "qwen3.6-35b-a3b",  "label": "Qwen3.6 35B MoE", "note": "best answers, ~0.7 s",
+    {"id": "qwen3.6-35b-a3b",     "label": "Qwen3.6 35B MoE",   "note": "best answers, ~0.7 s",
      "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
-    {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",     "note": "~0.6 s, terse",     "extra": {}},
+    {"id": "us-nemotron-30b-a3b", "label": "Nemotron 3.5 30B",  "note": "~0.8 s",
+     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
+    {"id": "gemma4-e4b-mlx",      "label": "Gemma 4 E4B",       "note": "~1.2 s, terse", "extra": {}},
+    {"id": "us-gemma4-26b-a4b",   "label": "Gemma 4 26B MoE",   "note": "~1.6 s", "extra": {}},
 ]
 CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}
 TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")
