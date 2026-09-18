@@ -242,25 +242,31 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 | `INFER_BASE_URL` | — | OpenAI-compatible endpoint, required |
 | `INFER_API_KEY` | — | its key, required; never reaches the browser |
 | `STT_MODEL` | `parakeet-tdt-0.6b-v2` | transcription |
-| `CHAT_MODEL` | `gemma4-e4b-mlx` | the answer |
+| `CHAT_MODEL` | `qwen3.6-35b-a3b` | the answer |
 | `TTS_MODEL` | `kokoro-tts` | speech |
 | `DAILY_BUDGET` | `2000` | requests per UTC day before the demo closes itself |
 | `DEMO_ENABLED` | `1` | set to `0` to take it down without redeploying |
 
 ## Models, and why each needs a different flag
 
-Six models in the picker, ranked by how good the answer is per second of waiting. Median of four
-voice-shaped questions — a capability question, one that should be refused, one testing recall of the
-previous turn, and one asking for a plain explanation — measured 2026-09-13:
+Three models in the picker. The default changed on 2026-09-18 to a mixture-of-experts model: same
+harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
+
+| model | first word | full turn | flag it needs |
+|---|---|---|---|
+| **Qwen3.6 35B MoE** (default) | 0.26 s | **0.70 s** | `enable_thinking: false` |
+| Qwen3.5 9B (previous default, retired) | 0.26 s | 1.07 s | `enable_thinking: false` |
+
+It activates ~3B parameters per token, so it turns around as fast as a 4B model while being the model
+that tied a dense 27B on 707 mechanically checked items. It is also pinned on the engine, so a quiet
+spell no longer ends in a cold load for the next visitor. The other two, from the 2026-09-13 run (median
+of four questions: a capability question, one to refuse, a recall of the previous turn, a plain
+explanation):
 
 | model | median | flag it needs | without the flag |
 |---|---|---|---|
-| **Qwen3.5 9B** (default) | **0.87 s** | `enable_thinking: false` | reads *"Thinking Process: 1. Analyze the Request"* aloud |
-| Qwen3 VL 4B | 0.51 s | none | — |
-| Qwen3.5 4B | 0.59 s | `enable_thinking: false` | same leak as the 9B |
 | Gemma 4 E4B | 0.61 s | none | — |
 | GPT-OSS 20B | ~2.5 s | `reasoning_effort: low` | thinking eats the budget; content comes back empty |
-| Qwen3.8 27B | ~3 s | `enable_thinking: false` | 10 s, and it says *"We need answer user's question:"* |
 
 **Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`.** That
 one fact explains most of what looks like a model being strange out loud. Two other fixes live here:
@@ -269,9 +275,9 @@ the budget is **220 tokens**, not 120, because three spoken sentences were being
 cleanly rather than narrating deliberation.
 
 **Measured and rejected.** Phi-4-mini is quick (0.55 s) and was the only model to get a plain recall
-question wrong, answering what it was rather than what it had just been told. `qwen3.8-27b-mtplx` is
-gone from the engine and 404s. The vision models earn their place on text alone: `qwen3-vl-4b` was the
-quickest good answer of anything tested, and the vision tower simply sits idle on a text request.
+question wrong, answering what it was rather than what it had just been told. Qwen3.5 4B/9B, Qwen3 VL
+4B and the dense Qwen3.8 27B were in the picker until 2026-09-18 and are gone from the engine; a stale
+choice from an open tab falls back to the default rather than failing.
 
 ## Voices
 

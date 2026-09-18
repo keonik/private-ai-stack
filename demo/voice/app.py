@@ -10,7 +10,7 @@ Environment:
     INFER_BASE_URL   OpenAI-compatible endpoint (required), e.g. https://example.com/v1
     INFER_API_KEY    key for it (required)
     STT_MODEL        default parakeet-tdt-0.6b-v2
-    CHAT_MODEL       default gemma4-e4b-mlx
+    CHAT_MODEL       default qwen3.6-35b-a3b
     TTS_MODEL        default kokoro-tts
     DAILY_BUDGET     total requests served per UTC day before the demo closes (default 2000)
     DEMO_ENABLED     set to 0 to take it down without redeploying
@@ -34,33 +34,36 @@ from fastapi.staticfiles import StaticFiles
 BASE = os.environ.get("INFER_BASE_URL", "").rstrip("/")
 KEY = os.environ.get("INFER_API_KEY", "")
 STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.5-9b")
+CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.6-35b-a3b")
 
 # Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
-# reasoning aloud. Median of four voice-shaped questions, measured on the reference machine 2026-09-13:
+# reasoning aloud.
 #
-#   qwen3-vl-4b    0.51 s   nothing needed
-#   qwen3.5-4b     0.59 s   enable_thinking=false
+# 2026-09-18, one harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
+#
+#   qwen3.6-35b-a3b  first word 0.26 s   full turn 0.70 s   185 tok/s   enable_thinking=false
+#   qwen3.5-9b       first word 0.26 s   full turn 1.07 s    99 tok/s   (the previous default)
+#
+# The MoE activates ~3B parameters per token, so it answers as fast as a 4B model while being the
+# model that tied a dense 27B on 707 checked items (benchmarks repo, llm-quality/). It is pinned on
+# the engine, so the first visitor after a quiet spell no longer waits for a cold load. The 9B, 4B and
+# Qwen3-VL-4B were retired from the engine the same day.
+#
+# From 2026-09-13, same "median of four questions" method as before:
 #   gemma4-e4b     0.61 s   nothing needed          terse; the original "odd helpfulness" complaint
-#   qwen3.5-9b     0.87 s   enable_thinking=false   best answers per second measured
 #   gpt-oss-20b    2.5 s    reasoning_effort=low    else thinking eats the budget and content is empty
-#   Qwen3.8-27B    3.0 s    enable_thinking=false   else 10 s and it says "We need answer user's question:"
 #
 # Every Qwen generation here ships thinking ON by default and writes it into `content`, not
 # `reasoning_content` — so without the flag the assistant literally reads "Thinking Process: 1. Analyze
-# the Request" aloud. Phi-4-mini was measured too (0.55 s) and left out: it was the only model that got
-# a plain recall question wrong, answering what it was rather than what it had just been told.
+# the Request" aloud. The engine also sets enable_thinking=false for the MoE server-side; the flag
+# stays here so the picker does not depend on that. Phi-4-mini was measured too (0.55 s) and left out:
+# it was the only model that got a plain recall question wrong.
 CHAT_CHOICES = [
-    {"id": "qwen3.5-9b",       "label": "Qwen3.5 9B",     "note": "best answers, ~0.9 s",
+    {"id": "qwen3.6-35b-a3b",  "label": "Qwen3.6 35B MoE", "note": "best answers, ~0.7 s",
      "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
-    {"id": "qwen3-vl-4b",      "label": "Qwen3 VL 4B",    "note": "fastest, ~0.5 s",   "extra": {}},
-    {"id": "qwen3.5-4b",       "label": "Qwen3.5 4B",     "note": "~0.6 s",
-     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
-    {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",    "note": "~0.6 s, terse",     "extra": {}},
-    {"id": "gpt-oss-20b-mlx",  "label": "GPT-OSS 20B",    "note": "~2.5 s, reasons",
+    {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",     "note": "~0.6 s, terse",     "extra": {}},
+    {"id": "gpt-oss-20b-mlx",  "label": "GPT-OSS 20B",     "note": "~2.5 s, reasons",
      "extra": {"reasoning_effort": "low"}},
-    {"id": "Qwen3.8-27B-4bit", "label": "Qwen3.8 27B",    "note": "~3 s, heavyweight",
-     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
 ]
 CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}
 TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")
