@@ -251,12 +251,12 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
 
 ## Keeping it up
 
-`./scripts/install-launchd.sh` installs three user agents (templates in `launchd/`):
+`./scripts/install-launchd.sh` installs these user agents (templates in `launchd/`):
 
 - `dev.private-ai-stack.backup` — `backup.sh` at 03:15, keeps 7 tarballs (`KEEP`). One run of the
   current data set is ~500 MB. Log: `~/Library/Logs/private-ai-stack.backup.log`.
-- `dev.private-ai-stack.keepalive` — every 5 min, `docker compose up -d` if any service is not
-  running. It does nothing when Docker itself is down (stopping Docker is a person's decision, not
+- `dev.private-ai-stack.keepalive` — every 2 min: first `colima-doctor.sh` (below), then
+  `docker compose up -d` if any service is not running. It does nothing when Docker itself is down (stopping Docker is a person's decision, not
   a script's). Verified by stopping a service by hand: back within one tick.
 - `dev.private-ai-stack.docker-boot` — once at login: if the Docker engine is unreachable it runs
   `colima start` (Homebrew's colima is not a login service by default, so nothing came back after a
@@ -264,8 +264,37 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
   already down, so a deliberate `colima stop` during the day stays stopped. On a Docker Desktop machine
   it says so and exits rather than guessing.
 
-Note that the engine is shared with anything else on the machine that uses Docker, so this agent starts
-that too. `./scripts/install-launchd.sh remove` uninstalls all three.
+- `dev.private-ai-stack.deployer` — every minute, builds and swaps in any app whose branch moved.
+  See [deployer/README.md](deployer/README.md).
+- `dev.private-ai-stack.host-metrics` — the host exporter Prometheus scrapes on :9419.
+
+Note that the engine is shared with anything else on the machine that uses Docker, so these agents start
+that too. `./scripts/install-launchd.sh remove` uninstalls them all.
+
+### When colima dies from the outside in
+
+`scripts/colima-doctor.sh` (run by keepalive) exists for one specific failure, seen on 2026-09-15: the VM
+runs, `colima status` says "running", `colima ssh -- docker ps` shows every container healthy — and the
+host can reach none of them. Because the Cloudflare tunnels and the key gateway proxy to
+`127.0.0.1:<published port>`, every public service 502s at once while nothing looks wrong.
+
+It calls that state only when **the host cannot reach docker.sock, or every published port at once
+refuses a connection** (one dead port is an app's problem; all of them is the plumbing), and it re-checks
+five seconds later before acting. Then it notes what was running **inside** the VM, restarts colima,
+brings compose back, starts the containers that have no restart policy and would otherwise stay down,
+gives the deployer a tick, and confirms the host can reach things again — reporting to ntfy at each step.
+It never restarts a colima that is stopped, and never twice inside `COLIMA_DOCTOR_COOLDOWN` (30 min):
+a machine that cannot recover should page a person, not loop.
+
+```sh
+./scripts/colima-doctor.sh --check                      # what it sees, changes nothing
+NTFY_URL= COLIMA_DOCTOR_FORCE="drill" COLIMA_DOCTOR_DRY=1 ./scripts/colima-doctor.sh   # rehearse
+```
+
+One bug worth keeping in mind, found while testing it: `colima status | grep -q running` is wrong.
+`grep -q` exits at the first match, colima dies of SIGPIPE, and under `pipefail` the check reads as
+"colima is not running" — the watchdog would have sat out the exact failure it exists for. Capture the
+output and match it, don't pipe it into a short-circuiting grep.
 
 ## Grafana through a tunnel
 

@@ -4,6 +4,9 @@
 # If Docker itself is down we do nothing: stopping Docker is an operator decision, not ours.
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# First: colima can be "running" with its host-side plumbing dead, which looks like every service at once
+# being down and cannot be fixed by anything below. That check is cheap and usually silent.
+./scripts/colima-doctor.sh || true
 docker info >/dev/null 2>&1 || exit 0
 want=$(docker compose config --services 2>/dev/null | sort)
 have=$(docker compose ps --status running --services 2>/dev/null | sort)
