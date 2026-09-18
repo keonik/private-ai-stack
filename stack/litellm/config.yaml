@@ -12,7 +12,7 @@ model_list:
   # ---------------- oMLX (Apple Silicon primary) ----------------
   - model_name: local/chat
     litellm_params:
-      model: openai/Qwen3.8-27B-4bit
+      model: openai/qwen3.8-27b-coder
       api_base: os.environ/OMLX_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/chat-small
@@ -40,8 +40,12 @@ model_list:
   # directly keeps working when the public gateway is pointed at this router instead.
   - model_name: gpt-oss-20b-mlx
     litellm_params: { model: openai/gpt-oss-20b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  # Alias, not a model. This was a second copy of the same Qwen3.8-27B (affine
+  # int4 g64, where qwen3.8-27b-coder is nvfp4 g16), and a local/chat request
+  # would load it alongside the pinned copy — 30 GB resident for one model. The
+  # name stays because demo/voice and older clients still ask for it.
   - model_name: Qwen3.8-27B-4bit
-    litellm_params: { model: openai/Qwen3.8-27B-4bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.8-27b-coder, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: gemma4-e4b-mlx
     litellm_params: { model: openai/gemma4-e4b-mlx, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder

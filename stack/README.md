@@ -77,7 +77,7 @@ Measured through LiteLLM on an M4 Max, thinking off, 200 generated tokens:
 |---|---|---|
 | `local/chat-small` | oMLX · gemma4-e4b (4B-class, VLM) | 89 |
 | `ollama/chat-small` | Ollama · qwen3:4b | 127 |
-| `local/chat` | oMLX · Qwen3.8-27B-4bit | 28 |
+| `local/chat` | oMLX · Qwen3.8-27B nvfp4 (`qwen3.8-27b-coder`) | 29 |
 | `ollama/chat` | Ollama · qwen3:8b | 77 |
 
 Read carefully: these are different models, not the same model on two engines.
