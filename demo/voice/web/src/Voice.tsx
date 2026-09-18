@@ -34,7 +34,7 @@ import {
 import { Transcription, TranscriptionSegment } from "@/components/ai-elements/transcription";
 import { Button } from "@/components/ui/button";
 import { Ring, type Phase } from "@/components/Ring";
-import { SILENT_WAV, chime, createGate, BLOCK, PAUSE_MS, type GateEvent, type Sensitivity } from "@/lib/audio";
+import { SILENT_WAV, chime, thinkingTone, createGate, BLOCK, PAUSE_MS, type GateEvent, type Sensitivity } from "@/lib/audio";
 import { createSpeaker, shapeOf, speechBounds, type Clip } from "@/lib/speaker";
 
 type Segment = { text: string; startSecond: number; endSecond: number };
@@ -50,7 +50,11 @@ type ModelChoice = { id: string; label: string; note: string };
 
 // The switches the lab panel flips. Each one is a separate experiment, so any combination is allowed.
 type ReplyMode = "eager" | "stream" | "whole";
-type FillerMode = "off" | "slow" | "quick";
+// Canned spoken fillers turned out to be the goofiest thing in the demo: five phrases drawn at random,
+// mismatched to the question ("Good question." after "what time is it") and repeating across a conversation.
+// They were worth it when a reply took 2.8 s; Kokoro now starts at ~2.1 s, so one fired on nearly every turn.
+// Default off; a quiet tone covers a wait without pretending to be speech; words only for the slow engines.
+type FillerMode = "off" | "tone" | "words";
 type BargeMode = "smart" | "instant" | "off";
 type TurnMode = "smart" | "pause";
 type TranscriptMode = "spoken" | "written";
@@ -64,9 +68,9 @@ type Lab = {
   chime: boolean;
 };
 const LAB_DEFAULT: Lab = {
-  reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken", chime: true,
+  reply: "eager", barge: "smart", fillers: "off", endOfTurn: 700, turn: "smart", transcript: "spoken", chime: true,
 };
-const FILLER_AFTER: Record<Exclude<FillerMode, "off">, number> = { quick: 250, slow: 600 };
+const FILLER_AFTER: Record<Exclude<FillerMode, "off">, number> = { tone: 600, words: 1200 };
 
 // Smart Turn, after Hugging Face speech-to-speech: a turn that sounds finished starts at once and can still be
 // reopened for a moment; one that does not waits on the server and stays reopenable for longer.
@@ -76,7 +80,8 @@ const REOPEN_INCOMPLETE_MS = 2000;
 // opened, which already took ~260 ms of voice, so this is ~0.9 s of voice in all.
 const LONG_VOICED_MS = 650;
 const BARGE_DECIDE_MS = 2500; // no verdict by then: assume you meant it
-const WATCHDOG_MS = 12_000; // the Qwen runtime's figure for "the model never started answering"
+const WATCHDOG_MS = 12_000; // the Qwen runtime's figure for "the model never started answering"; only counts
+                            // while nothing is being said — see kick()
 
 /** One row of the latency table. Times are seconds from the moment the gate decided you had finished. */
 type Run = {
@@ -170,6 +175,7 @@ const api = (input: string, init: RequestInit = {}) =>
 const loadLab = (): Lab => {
   try {
     const saved = JSON.parse(remembered("lab") ?? "{}");
+    if (!["off", "tone", "words"].includes(saved.fillers)) delete saved.fillers;  // the old quick/slow phrases
     // The first lab had a yes/no "interrupt"; keep an explicit "no" from it.
     if (saved.barge === undefined && saved.interrupt === false) saved.barge = "off";
     delete saved.interrupt;
@@ -206,6 +212,7 @@ export default function Voice() {
   const [previewing, setPreviewing] = useState<string | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [playhead, setPlayhead] = useState<{ id: number; t: number } | null>(null);
+  const [draft, setDraft] = useState("");
   const [tester, setTester] = useState<string | null>(null);
   const [lab, setLabState] = useState<Lab>(loadLab);
   const [runs, setRuns] = useState<Run[]>([]);
@@ -238,6 +245,7 @@ export default function Voice() {
     new Map<string, { url: string; env: number[] | null; text: string; start?: number; end?: number }[]>()
   );
   const lastFiller = useRef(-1);
+  const toneClip = useRef<{ url: string; env: number[] } | null>(null);
   // Mic loudness divided by the reply's loudness, sampled while the reply plays and you are quiet: how much
   // of the Mac's own voice comes back into the microphone in this room, after the browser's echo cancelling.
   const echoRatios = useRef<number[]>([]);
@@ -327,8 +335,8 @@ export default function Voice() {
     };
   }, [running]);
   useEffect(() => {
-    if (running) void prepareFillers(engine, voice);
-  }, [engine, voice, running]);
+    if (running && lab.fillers === "words") void prepareFillers(engine, voice);
+  }, [engine, voice, running, lab.fillers]);
   useEffect(() => {
     if (!running) return;
     const t = window.setInterval(() => {
@@ -356,7 +364,7 @@ export default function Voice() {
           if (clip.kind === "filler") {
             if (cur.replyStarted) return;
             updRun(cur.runId, { filler: audible });
-            go("speaking", "Thinking out loud");
+            go("thinking", clip.text ? "Thinking out loud" : "Thinking");
             return;
           }
           if (!cur.replyStarted) {
@@ -380,25 +388,29 @@ export default function Voice() {
     return speakerRef.current;
   };
 
-  /** Fillers are fetched once per voice, before they are needed; a filler that has to be downloaded is late. */
+  /**
+   * Fillers are fetched once per voice, before they are needed; one that has to be downloaded is late.
+   *
+   * One at a time, and never while a turn is in flight. Fetching all five at once was measured pushing the
+   * first answer on Qwen3-TTS from 2.6 s to 9 s: five syntheses and the reply were competing for one GPU.
+   */
   const prepareFillers = async (forEngine: string, forVoice: string) => {
     const key = `${forEngine}:${forVoice}`;
     if (!forVoice || fillerCache.current.has(key)) return;
-    fillerCache.current.set(key, []);
+    const set: { url: string; env: number[] | null; text: string; start?: number; end?: number; voiceAt?: number }[] = [];
+    fillerCache.current.set(key, set);   // the same array the player reads: it fills up as they arrive
     try {
       const { fillers } = await (await fetch("/api/fillers")).json();
-      const set = await Promise.all(
-        (fillers as string[]).map(async (text, i) => {
-          const r = await api(`/api/filler?engine=${encodeURIComponent(forEngine)}&voice=${encodeURIComponent(forVoice)}&i=${i}`);
-          if (!r.ok) throw new Error("filler");
-          const bytes = await r.arrayBuffer();
-          const env = await shapeOf(ctxRef.current, bytes);
-          return { text, env, ...speechBounds(env), url: URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })) };
-        })
-      );
-      fillerCache.current.set(key, set);
+      for (const [i, text] of (fillers as string[]).entries()) {
+        while (curRef.current) await new Promise((r) => setTimeout(r, 250));   // the answer comes first
+        const r = await api(`/api/filler?engine=${encodeURIComponent(forEngine)}&voice=${encodeURIComponent(forVoice)}&i=${i}`);
+        if (!r.ok) throw new Error("filler");
+        const bytes = await r.arrayBuffer();
+        const env = await shapeOf(ctxRef.current, bytes);
+        set.push({ text, env, ...speechBounds(env), url: URL.createObjectURL(new Blob([bytes], { type: "audio/mpeg" })) });
+      }
     } catch {
-      fillerCache.current.delete(key);
+      if (!set.length) fillerCache.current.delete(key);
     }
   };
 
@@ -469,7 +481,7 @@ export default function Voice() {
   };
 
   const handleTurn = useCallback(
-    async (blob: Blob, seconds: number, speculative = false) => {
+    async (blob: Blob | null, seconds: number, speculative = false, typed = "") => {
       const L = labRef.current;
       const gate = gateRef.current;
       const sp = speaker();
@@ -485,7 +497,8 @@ export default function Voice() {
       // the echo allowance, it never throws the utterance away.
       gate?.setMode(speculative || L.barge !== "off" ? "barge" : "paused");
       const silence = (speculative ? PAUSE_MS : L.endOfTurn) / 1000;
-      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence, turnMode: speculative ? "smart" as const : "pause" as const,
+      setRuns((rs) => [{ id: runId, reply: L.reply, model, engine, silence: typed ? 0 : silence,
+        turnMode: speculative ? "smart" as const : "pause" as const,
         barge: L.barge, fillers: L.fillers }, ...rs].slice(0, 40));
       go("thinking", "Transcribing");
 
@@ -494,6 +507,9 @@ export default function Voice() {
         window.clearTimeout(cur.watchdog);
         cur.watchdog = window.setTimeout(() => {
           if (curRef.current !== cur) return;
+          // Still talking? Then nothing is wrong: on a heavy engine one sentence can take 8 s to synthesise,
+          // and the gap between audio events is not silence to the person listening.
+          if (sp?.busy) return kick();
           cur.ctl.abort();
           clearTimers(cur);
           speakerRef.current?.stop();
@@ -511,8 +527,14 @@ export default function Voice() {
         if (L.fillers === "off") return;
         const wait = Math.max(0, FILLER_AFTER[L.fillers] - (performance.now() - cur.tEnd));
         cur.fillerTimer = window.setTimeout(() => {
+          if (curRef.current !== cur || cur.replyQueued || !sp) return;
+          if (L.fillers === "tone") {
+            toneClip.current ||= thinkingTone();
+            sp.enqueue({ kind: "filler", ...toneClip.current, text: "" });
+            return;
+          }
           const set = fillerCache.current.get(`${engine}:${voice}`);
-          if (curRef.current !== cur || cur.replyQueued || !set?.length || !sp) return;
+          if (!set?.length) return;
           let k = Math.floor(Math.random() * set.length);
           if (k === lastFiller.current) k = (k + 1) % set.length;
           lastFiller.current = k;
@@ -539,8 +561,9 @@ export default function Voice() {
           if (!e.text) return;
           cur.youId = nextId.current++;
           setTurns((t) => [...t, {
-            id: cur.youId, who: "you", text: e.text, audio: URL.createObjectURL(blob), segments: e.segments ?? [],
-            meta: e.realtime ? `${e.realtime}× realtime` : "",
+            id: cur.youId, who: "you", text: e.text, segments: e.segments ?? [],
+            audio: blob ? URL.createObjectURL(blob) : undefined,
+            meta: e.realtime ? `${e.realtime}× realtime` : e.typed ? "typed" : "",
           }]);
           go("thinking", "Thinking");
         } else if (e.type === "sentence") {
@@ -566,10 +589,10 @@ export default function Voice() {
 
       try {
         const fd = new FormData();
-        fd.append("audio", blob, "clip.wav");
+        if (blob) fd.append("audio", blob, "clip.wav");
         fd.append("meta", JSON.stringify({
           mode: L.reply, model, engine, voice, seconds, carry: carry.current, history: history.current.slice(-6),
-          turn: speculative ? "smart" : "pause",
+          turn: speculative ? "smart" : "pause", text: typed,
         }));
         const r = await api("/api/talk", { method: "POST", body: fd, signal: cur.ctl.signal });
         if (!r.ok || !r.body) throw new Error((await r.json().catch(() => ({}))).detail ?? `Request failed (${r.status}).`);
@@ -760,6 +783,28 @@ export default function Voice() {
     }
   };
 
+  /** Typed instead of spoken. Same pipeline, same spoken answer — it just skips transcription. */
+  const send = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    const player = playerRef.current;
+    if (player && !unlocked.current) {
+      // This click is the gesture iOS wants before any later audio may play itself.
+      (player as HTMLMediaElement & { playsInline: boolean }).playsInline = true;
+      try {
+        player.src = SILENT_WAV;
+        await player.play();
+        player.pause();
+        unlocked.current = true;
+      } catch {
+        /* the reply may still play */
+      }
+    }
+    if (!ctxRef.current && typeof AudioContext !== "undefined") ctxRef.current = new AudioContext();
+    await turnRef.current(null, 0, false, text);
+  };
+
   const start = async () => {
     setError(null);
     const player = playerRef.current;
@@ -809,7 +854,7 @@ export default function Voice() {
       return coupling * (sp?.recentPeak() ?? 0);
     });
     gateRef.current = gate;
-    void prepareFillers(engine, voice);
+    if (labRef.current.fillers === "words") void prepareFillers(engine, voice);
     if (labRef.current.chime && sp) {
       // Measure this room's echo before the first reply: the gate only listens to levels while the chime plays.
       echoRatios.current = [];
@@ -878,6 +923,14 @@ export default function Voice() {
       setPreviewing(null);
     }
   };
+
+  // Stick to the newest turn while you are at the bottom; leave you alone when you have scrolled up to read.
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useEffect(() => {
+    const el = scroller.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [turns, status]);
 
   const byLanguage = voices.reduce<Record<string, VoiceChoice[]>>((acc, v) => {
     (acc[v.language] ||= []).push(v);
@@ -1051,6 +1104,102 @@ export default function Voice() {
           {error ? <p className="text-destructive text-sm">{error}</p> : null}
         </section>
 
+        <section aria-label="Conversation" className="flex flex-col overflow-hidden rounded-lg border bg-card">
+          <div
+            className="flex min-h-[220px] flex-col gap-3 overflow-y-auto p-4 [max-height:min(56vh,560px)]"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+            }}
+            ref={scroller}
+          >
+            {turns.length === 0 ? (
+              <p className="m-auto max-w-[36ch] text-center text-muted-foreground text-sm">
+                Press start and talk, or type below. Either way the answer is spoken back.
+              </p>
+            ) : (
+              turns.map((turn) => (
+                <article
+                  className={`flex flex-col gap-1 ${turn.who === "you" ? "items-end" : "items-start"}`}
+                  key={turn.id}
+                >
+                  <div
+                    className={`max-w-[min(85%,52ch)] rounded-2xl px-3.5 py-2 ${
+                      turn.who === "you"
+                        ? "rounded-br-sm bg-[var(--color-you)]/12 text-foreground"
+                        : "rounded-bl-sm bg-muted text-foreground"
+                    }`}
+                  >
+                    <span className="break-words">
+                      {turn.who === "you" && turn.segments?.length ? (
+                        <Transcription
+                          currentTime={playhead?.id === turn.id ? playhead.t : 0}
+                          onSeek={(t) => {
+                            const el = document.getElementById(`audio-${turn.id}`) as HTMLAudioElement | null;
+                            if (el) {
+                              el.currentTime = t;
+                              void el.play();
+                            }
+                          }}
+                          segments={turn.segments}
+                        >
+                          {(segment, i) => <TranscriptionSegment index={i} key={i} segment={segment} />}
+                        </Transcription>
+                      ) : (
+                        turn.text
+                      )}
+                    </span>
+                    {turn.audio ? (
+                      <AudioPlayer className="mt-1.5 w-full">
+                        <AudioPlayerElement
+                          id={`audio-${turn.id}`}
+                          onTimeUpdate={(e) => setPlayhead({ id: turn.id, t: (e.target as HTMLAudioElement).currentTime })}
+                          slot="media"
+                          src={turn.audio}
+                        />
+                        <AudioPlayerControlBar>
+                          <AudioPlayerPlayButton />
+                          <AudioPlayerTimeRange />
+                          <AudioPlayerTimeDisplay />
+                        </AudioPlayerControlBar>
+                      </AudioPlayer>
+                    ) : null}
+                  </div>
+                  <span className="px-1 font-mono text-[10.5px] text-muted-foreground uppercase tracking-[0.08em]">
+                    {turn.who === "you" ? "You" : "Mac"}
+                    {turn.meta ? ` · ${turn.meta}` : ""}
+                  </span>
+                </article>
+              ))
+            )}
+            {phase === "thinking" || phase === "speaking" ? (
+              <span className="px-1 font-mono text-[10.5px] text-muted-foreground uppercase tracking-[0.08em]">
+                {status}…
+              </span>
+            ) : null}
+          </div>
+
+          <form
+            className="flex items-center gap-2 border-t p-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
+            <input
+              aria-label="Type a message"
+              className="h-9 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              maxLength={400}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={running ? "…or type instead of talking" : "Type a message — no microphone needed"}
+              value={draft}
+            />
+            <Button disabled={!draft.trim()} size="sm" type="submit">
+              Send
+            </Button>
+          </form>
+        </section>
+
         <section className="flex flex-col gap-3 rounded-lg border bg-card p-4" aria-label="Conversation lab">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="font-mono text-[11px] text-primary uppercase tracking-[0.14em]">Lab</h2>
@@ -1084,12 +1233,12 @@ export default function Voice() {
               </select>
             </label>
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
-              Fillers while it thinks
+              While it thinks
               <select aria-label="Fillers" className="h-8 rounded-md border bg-card px-2 font-mono text-[12px] text-foreground"
                 onChange={(e) => setLab({ fillers: e.target.value as FillerMode })} value={lab.fillers}>
-                <option value="off">Off</option>
-                <option value="slow">Only when slow · after {FILLER_AFTER.slow} ms</option>
-                <option value="quick">Quick acknowledgement · after {FILLER_AFTER.quick} ms</option>
+                <option value="off">Nothing · the ring shows it is busy</option>
+                <option value="tone">A quiet tone · after {FILLER_AFTER.tone} ms</option>
+                <option value="words">It says something · after {FILLER_AFTER.words} ms</option>
               </select>
             </label>
             <label className="flex flex-col gap-1 text-left text-[12px] text-muted-foreground">
@@ -1161,60 +1310,6 @@ export default function Voice() {
           ) : null}
         </section>
 
-        <section className="divide-y rounded-lg border bg-card">
-          {turns.length === 0 ? (
-            <p className="p-4 text-muted-foreground text-sm">Nothing said yet.</p>
-          ) : (
-            turns.map((turn) => (
-              <article className="flex flex-col gap-2 p-4" key={turn.id}>
-                <div className="flex items-baseline gap-3">
-                  <span
-                    className={`font-mono text-[11px] uppercase tracking-[0.1em] ${
-                      turn.who === "you" ? "text-[var(--color-you)]" : "text-muted-foreground"
-                    }`}
-                  >
-                    {turn.who === "you" ? "You" : "Mac"}
-                  </span>
-                  <span className="min-w-0 flex-1 break-words">
-                    {turn.who === "you" && turn.segments?.length ? (
-                      <Transcription
-                        currentTime={playhead?.id === turn.id ? playhead.t : 0}
-                        onSeek={(t) => {
-                          const el = document.getElementById(`audio-${turn.id}`) as HTMLAudioElement | null;
-                          if (el) {
-                            el.currentTime = t;
-                            void el.play();
-                          }
-                        }}
-                        segments={turn.segments}
-                      >
-                        {(segment, i) => <TranscriptionSegment index={i} key={i} segment={segment} />}
-                      </Transcription>
-                    ) : (
-                      turn.text
-                    )}
-                  </span>
-                  <span className="whitespace-nowrap font-mono text-[11.5px] text-primary">{turn.meta}</span>
-                </div>
-                {turn.audio ? (
-                  <AudioPlayer className="w-full">
-                    <AudioPlayerElement
-                      id={`audio-${turn.id}`}
-                      onTimeUpdate={(e) => setPlayhead({ id: turn.id, t: (e.target as HTMLAudioElement).currentTime })}
-                      slot="media"
-                      src={turn.audio}
-                    />
-                    <AudioPlayerControlBar>
-                      <AudioPlayerPlayButton />
-                      <AudioPlayerTimeRange />
-                      <AudioPlayerTimeDisplay />
-                    </AudioPlayerControlBar>
-                  </AudioPlayer>
-                ) : null}
-              </article>
-            ))
-          )}
-        </section>
       </main>
 
       <audio hidden ref={playerRef} />

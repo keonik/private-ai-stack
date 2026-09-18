@@ -41,3 +41,20 @@ test("the microphone selector opens", async ({ page }) => {
   await page.getByRole("button", { name: /select microphone|microphone/i }).first().click();
   await expect(page.getByPlaceholder(/search microphones/i)).toBeVisible();
 });
+
+test("a typed message is answered without touching the microphone", async ({ page }) => {
+  test.setTimeout(60_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto(`${APP}${process.env.APP_PASS ? `/?pass=${process.env.APP_PASS}` : ""}`);
+  const box = page.getByRole("textbox", { name: /type a message/i });
+  await box.fill("What is the capital of France? Answer in one short sentence.");
+  await page.getByRole("button", { name: /^send$/i }).click();
+  await expect(box).toHaveValue("");                                  // cleared on send
+  await expect(page.getByText(/capital of France/i).first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 40_000 });
+  // The conversation pane scrolls rather than growing the page.
+  const pane = page.locator("section[aria-label='Conversation'] div").first();
+  expect(await pane.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
+  expect(errors, `page errors: ${errors.join(" | ")}`).toHaveLength(0);
+});

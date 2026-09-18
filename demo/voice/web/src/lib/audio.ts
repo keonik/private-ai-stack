@@ -297,18 +297,29 @@ export function envelopeOfBuffer(b: AudioBuffer): number[] {
   return env;
 }
 
+function concat(a: ArrayBuffer, b: ArrayBuffer): ArrayBuffer {
+  const out = new Uint8Array(a.byteLength + b.byteLength);
+  out.set(new Uint8Array(a), 0);
+  out.set(new Uint8Array(b), a.byteLength);
+  return out.buffer;
+}
+
 /**
- * A short rising two-note chime, made here rather than fetched. It says "listening" when a conversation
- * starts, and — played through the same element as the replies — it is how much of the Mac's own voice
- * comes back into the microphone is measured before the first reply rather than during it.
+ * One quiet low note: "still here, still working", without pretending to be speech. Words in a canned
+ * filler mismatch the question and repeat across a conversation; a tone does neither.
  */
+export function thinkingTone(): { url: string; env: number[] } {
+  return tone([{ f: 196, at: 0, len: 0.5 }], 0.55, 0.14);
+}
+
+/** A short rising two-note chime: "listening". Also how the room's echo is measured before the first reply. */
 export function chime(): { url: string; env: number[] } {
+  return tone([{ f: 660, at: 0, len: 0.22 }, { f: 880, at: 0.16, len: 0.42 }], 0.62, 0.32);
+}
+
+function tone(notes: { f: number; at: number; len: number }[], seconds: number, gain: number) {
   const rate = 24_000;
-  const notes = [
-    { f: 660, at: 0, len: 0.22 },
-    { f: 880, at: 0.16, len: 0.42 },
-  ];
-  const n = Math.round(rate * 0.62);
+  const n = Math.round(rate * seconds);
   const pcm = new Int16Array(n);
   for (let i = 0; i < n; i++) {
     const t = i / rate;
@@ -318,7 +329,7 @@ export function chime(): { url: string; env: number[] } {
       if (u < 0 || u > len) continue;
       const attack = Math.min(1, u / 0.012);
       const decay = Math.exp(-u * 5.5);
-      v += Math.sin(2 * Math.PI * f * u) * attack * decay * 0.32 + Math.sin(4 * Math.PI * f * u) * attack * decay * 0.05;
+      v += Math.sin(2 * Math.PI * f * u) * attack * decay * gain + Math.sin(4 * Math.PI * f * u) * attack * decay * gain * 0.16;
     }
     pcm[i] = Math.max(-1, Math.min(1, v)) * 0x7fff;
   }
@@ -339,13 +350,6 @@ export function chime(): { url: string; env: number[] } {
   dv.setUint32(40, pcm.byteLength, true);
   const shape = envelopeOf(concat(head, pcm.buffer));
   return { url: URL.createObjectURL(new Blob([head, pcm], { type: "audio/wav" })), env: shape?.env ?? [] };
-}
-
-function concat(a: ArrayBuffer, b: ArrayBuffer): ArrayBuffer {
-  const out = new Uint8Array(a.byteLength + b.byteLength);
-  out.set(new Uint8Array(a), 0);
-  out.set(new Uint8Array(b), a.byteLength);
-  return out.buffer;
 }
 
 /** A moment of silence played inside a tap is what marks an element as user-permitted on iOS. */

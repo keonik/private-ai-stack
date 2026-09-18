@@ -56,13 +56,14 @@ test("a spoken question is answered, streamed, and timed", async () => {
 });
 
 test("talking over the reply stops it and answers the new question", async () => {
-  test.setTimeout(90_000);
-  const { browser, page } = await open("barge", { reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken" });
+  test.setTimeout(150_000);
+  const { browser, page } = await open("barge", { reply: "eager", barge: "smart", fillers: "words", endOfTurn: 700, turn: "smart", transcript: "spoken" });
   try {
     await page.getByRole("button", { name: /start conversation/i }).click();
     // Generous: a long story plus a cold model can push a real interruption past 20 s.
-    await expect(page.getByText(/interrupted|continued/).first()).toBeVisible({ timeout: 35_000 });
-    await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 35_000 });
+    await expect(page.getByText(/interrupted|continued/).first()).toBeVisible({ timeout: 45_000 });
+    // Spoken fillers put a clip in front of every answer, so the second turn lands later than it looks.
+    await expect(page.getByText(/paris/i).first()).toBeVisible({ timeout: 60_000 });
     const all = await rows(page).evaluateAll((trs) => trs.map((tr) => tr.textContent));
     console.log("barge rows:", all);
     const turns = await page.locator("article").allTextContents();
@@ -73,16 +74,21 @@ test("talking over the reply stops it and answers the new question", async () =>
 });
 
 test("the slowest realistic engine fills the wait instead of leaving silence", async () => {
-  test.setTimeout(60_000);
-  const { browser, page } = await open("turn", { reply: "eager", barge: "smart", fillers: "slow", endOfTurn: 700, turn: "smart", transcript: "spoken" }, "qwen3-tts-1.7b");
+  test.setTimeout(150_000);
+  const { browser, page } = await open("turn", { reply: "eager", barge: "smart", fillers: "words", endOfTurn: 700, turn: "smart", transcript: "spoken" }, "qwen3-tts-1.7b");
   try {
     await page.getByRole("button", { name: /start conversation/i }).click();
-    await expect(rows(page).first()).toContainText("done", { timeout: 45_000 });
+    // The point is that the wait is covered, not how long the answer itself takes: this engine's speed
+    // depends on what else the Mac has resident (measured 1 s a sentence on a quiet machine, 4-6 s with a
+    // 35B also loaded), so only the filler is held to a deadline.
+    await expect(rows(page).first().locator("td").nth(5)).toHaveText(/\d/, { timeout: 30_000 });
     const cells = await rows(page).first().locator("td").allTextContents();
     console.log("qwen3-tts row:", cells.join(" | "));
     expect(cells[1]).toContain("qwen3");
-    const firstHeard = Math.min(Number(cells[5]) || 99, Number(cells[6]) || 99);
-    expect(firstHeard).toBeLessThan(2.5);
+    expect(Number(cells[5])).toBeLessThan(2.5);                       // filler heard
+    // The answer starts, eventually: how long a whole reply takes on this engine depends on what else the
+    // machine has resident, so that is not a deadline this test should own.
+    await expect(rows(page).first().locator("td").nth(6)).toHaveText(/\d/, { timeout: 120_000 });
   } finally {
     await browser.close();
   }
@@ -96,7 +102,7 @@ test("Smart Turn: stopping mid-thought and carrying on is answered as one questi
     await expect(rows(page).first()).toContainText("done", { timeout: 40_000 });
     const all = await rows(page).evaluateAll((trs) => trs.map((tr) => tr.textContent));
     console.log("reopen rows:", all);
-    const you = await page.locator("article").filter({ hasText: /^You/ }).allTextContents();
+    const you = await page.locator("article:has(.items-end), article.items-end").allTextContents();
     console.log("you said:", you);
     // One answered turn, and it contains both halves of the sentence.
     expect(you).toHaveLength(1);

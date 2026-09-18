@@ -593,7 +593,7 @@ async def backchannel(request: Request, audio: UploadFile) -> JSONResponse:
 
 
 ENUMS = {"reply": {"eager", "stream", "whole"}, "turn": {"smart", "pause"}, "barge": {"smart", "instant", "off"},
-         "fillers": {"off", "slow", "quick"},
+         "fillers": {"off", "tone", "words"},
          "outcome": {"done", "interrupted", "continued", "reopened", "ignored", "timeout", "error"},
          "engine": {e["id"] for e in TTS_ENGINES}}
 _metric_posts: dict[str, deque] = defaultdict(deque)
@@ -706,19 +706,23 @@ def sse(kind: str, **data) -> bytes:
 
 
 @app.post("/api/talk")
-async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
+async def talk(request: Request, meta: str = Form("{}"), audio: UploadFile | None = None):
     from fastapi.responses import StreamingResponse
 
     # One request now, two more once the turn is really answered: a turn that is cancelled because you carried
     # on talking should not cost you three requests' worth of limit.
     guard(request, cost=1)
-    blob = await audio.read()
+    blob = await audio.read() if audio is not None else b""
     if len(blob) > MAX_AUDIO_BYTES:
         raise HTTPException(413, "That clip is too long for the demo. Keep it under about two minutes.")
     try:
         opts = json.loads(meta)
     except ValueError:
         opts = {}
+    # Typed instead of spoken: same pipeline, minus transcription. The answer is still spoken aloud.
+    typed = str(opts.get("text") or "").strip()[:MAX_TEXT]
+    if not blob and not typed:
+        raise HTTPException(400, "Nothing to answer.")
     engine, voice = pick_voice(opts.get("engine"), opts.get("voice"))
     choice = CHAT_BY_ID.get(opts.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
     mode = {"whole": "whole", "eager": "eager"}.get(opts.get("mode"), "stream")
@@ -737,10 +741,12 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
             # Transcription starts now, alongside the end-of-turn decision rather than after it: it is ~0.1 s of
             # GPU, and a turn that turns out to continue just throws the result away. On an "unfinished"
             # verdict the text is ready by the time the 600 ms wait ends.
-            stt_task = asyncio.create_task(http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
-                                                     files={"file": ("clip.wav", blob, "audio/wav")}))
-            tasks.append(stt_task)
-            if use_smart:
+            stt_task = None
+            if blob:
+                stt_task = asyncio.create_task(http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
+                                                         files={"file": ("clip.wav", blob, "audio/wav")}))
+                tasks.append(stt_task)
+            if blob and use_smart:
                 st = smart_turn()
                 if st is None:
                     yield sse("turn", complete=True, probability=None, ms=0, available=False)
@@ -765,18 +771,22 @@ async def talk(request: Request, audio: UploadFile, meta: str = Form("{}")):
                 yield sse("error", detail=e.detail)
                 return
             yield sse("proceed", at=since())
-            r = await stt_task
-            if r.status_code >= 400:
-                yield sse("error", detail=f"Transcription failed ({r.status_code}).")
-                return
-            d = r.json()
-            heard = (d.get("text") or "").strip()
-            segments = [{"text": (g.get("text") or "").strip(), "startSecond": float(g.get("start") or 0),
-                         "endSecond": float(g.get("end") or 0)}
-                        for g in (d.get("segments") or []) if (g.get("text") or "").strip()]
-            stt = since()
-            yield sse("heard", text=heard, segments=segments, at=stt,
-                      realtime=round(seconds / stt, 1) if seconds and stt else None, model=STT_MODEL)
+            if stt_task is None:
+                heard, segments = typed, []
+                yield sse("heard", text=heard, segments=[], at=since(), realtime=None, model="typed", typed=True)
+            else:
+                r = await stt_task
+                if r.status_code >= 400:
+                    yield sse("error", detail=f"Transcription failed ({r.status_code}).")
+                    return
+                d = r.json()
+                heard = (d.get("text") or "").strip()
+                segments = [{"text": (g.get("text") or "").strip(), "startSecond": float(g.get("start") or 0),
+                             "endSecond": float(g.get("end") or 0)}
+                            for g in (d.get("segments") or []) if (g.get("text") or "").strip()]
+                stt = since()
+                yield sse("heard", text=heard, segments=segments, at=stt,
+                          realtime=round(seconds / stt, 1) if seconds and stt else None, model=STT_MODEL)
             if not heard:
                 yield sse("done", at=since())
                 return
