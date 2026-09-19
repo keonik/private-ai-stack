@@ -10,7 +10,10 @@ test("the page renders its controls", async ({ page }) => {
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(APP);
   await expect(page.getByRole("button", { name: /start conversation/i })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: /chat model/i })).toBeVisible();
+  // The model picker only exists when there is a choice to make: the list comes from the engine, and it
+  // is down to one model at the moment.
+  const offered = (await (await page.request.get(`${APP}/api/models`)).json()).models.length;
+  await expect(page.getByRole("combobox", { name: /chat model/i })).toHaveCount(offered > 1 ? 1 : 0);
   await expect(page.getByRole("combobox", { name: /sensitivity/i })).toBeVisible();
   expect(errors, `page errors: ${errors.join(" | ")}`).toHaveLength(0);
 });
