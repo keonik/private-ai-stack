@@ -249,32 +249,29 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 
 ## Models, and why each needs a different flag
 
-Four models in the picker, matching what the engine actually serves — the line-up was cleaned out on
-2026-09-18 and the 9B, the 4B, the vision models, Phi-4-mini and both 27B builds are gone. Median of
-voice-shaped questions, measured the same day while the machine was also running something heavy, so the
-ranking holds and the absolute numbers are pessimistic:
+Two models in the picker. The default changed on 2026-09-18 to a mixture-of-experts model: same
+harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
+
+| model | first word | full turn | flag it needs |
+|---|---|---|---|
+| **Qwen3.6 35B MoE** (default) | 0.26 s | **0.70 s** | `enable_thinking: false` |
+| Qwen3.5 9B (previous default, retired) | 0.26 s | 1.07 s | `enable_thinking: false` |
+
+It activates ~3B parameters per token, so it turns around as fast as a 4B model while being the model
+that tied a dense 27B on 707 mechanically checked items. It is also pinned on the engine, so a quiet
+spell no longer ends in a cold load for the next visitor. The other, from the 2026-09-13 run (median
+of four questions: a capability question, one to refuse, a recall of the previous turn, a plain
+explanation):
 
 | model | median | flag it needs | without the flag |
 |---|---|---|---|
-| **Qwen3.6 35B MoE** (default) | **0.71 s** | `enable_thinking: false` | reads its reasoning aloud |
-| Nemotron 3.5 30B | 0.79 s | `enable_thinking: false` | 0.97 s, and it reasons in the open |
-| Gemma 4 E4B | 1.25 s | none | — |
-| Gemma 4 26B MoE | 1.56 s | none | — |
+| Gemma 4 E4B | 0.61 s | none | — |
 
-The default activates ~3B parameters per token, so it turns around as fast as a small dense model while
-answering like a big one, and it is pinned on the engine so a quiet spell does not end in a cold load for
-the next visitor.
-
-**Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`** — and
-Nemotron does the same. That one fact explains most of what looks like a model being strange out loud. Two
-other fixes live here: the budget is **220 tokens**, not 120, because three spoken sentences were being cut
-mid-word; and `reasoning_content` is never spoken — if a model thinks but returns no content, the request
-fails cleanly rather than narrating deliberation.
-
-**Not offered.** `us-gpt-oss-120b` is served by the engine but the demo does not list it: oMLX refuses to
-load it beside the voice models (*"projected memory 103 GB would exceed the dynamic ceiling"*), which is
-the memory guard doing its job. The retired 27B names still answer through the gateway, routed to the MoE,
-so anything that still asks for them by name gets an answer rather than a 404.
+**Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`.** That
+one fact explains most of what looks like a model being strange out loud. Two other fixes live here:
+the budget is **220 tokens**, not 120, because three spoken sentences were being cut mid-word; and
+`reasoning_content` is never spoken — if a model thinks but returns no content, the request fails
+cleanly rather than narrating deliberation.
 
 **Measured and rejected.** Phi-4-mini is quick (0.55 s) and was the only model to get a plain recall
 question wrong, answering what it was rather than what it had just been told. Qwen3.5 4B/9B, Qwen3 VL
