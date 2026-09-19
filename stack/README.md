@@ -75,7 +75,7 @@ Measured through LiteLLM on an M4 Max, thinking off, 200 generated tokens:
 
 | friendly name | backend · model | tok/s |
 |---|---|---|
-| `local/chat-small` | oMLX · gemma4-e4b (4B-class, VLM) | 89 |
+| `local/chat-small` | oMLX · same MoE as `local/chat` since 2026-09-19 (was gemma4-e4b, 89 tok/s) | 150 |
 | `ollama/chat-small` | Ollama · qwen3:4b | 127 |
 | `local/chat` | oMLX · Qwen3.6-35B-A3B MoE + MTP (`qwen3.6-35b-a3b`) | 150 |
 | `ollama/chat` | Ollama · qwen3:8b | 77 |
