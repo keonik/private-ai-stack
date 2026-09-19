@@ -1076,6 +1076,7 @@ export default function Voice() {
               </VoiceSelectorContent>
             </VoiceSelector>
 
+{models.length > 1 ? (
             <select
               aria-label="Chat model"
               className="h-8 rounded-md border bg-card px-2 font-mono text-[12px]"
@@ -1091,6 +1092,7 @@ export default function Voice() {
                 </option>
               ))}
             </select>
+            ) : null}
 
             <select
               aria-label="Microphone sensitivity"

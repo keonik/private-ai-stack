@@ -36,33 +36,45 @@ KEY = os.environ.get("INFER_API_KEY", "")
 STT_MODEL = os.environ.get("STT_MODEL", "parakeet-tdt-0.6b-v2")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "qwen3.6-35b-a3b")
 
-# Chat models offered in the picker, with the per-model flag each one needs to stop it reading its own
-# reasoning aloud.
+# What the picker offers is whatever the engine serves — see `refresh_catalogue()`. The list below is not
+# that list: it is the handful of things `/v1/models` cannot tell us about a model.
 #
-# 2026-09-18, one harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
-#
-#   qwen3.6-35b-a3b  first word 0.26 s   full turn 0.70 s   185 tok/s   enable_thinking=false
-#   qwen3.5-9b       first word 0.26 s   full turn 1.07 s    99 tok/s   (the previous default)
-#
-# The MoE activates ~3B parameters per token, so it answers as fast as a 4B model while being the
-# model that tied a dense 27B on 707 checked items (benchmarks repo, llm-quality/). It is pinned on
-# the engine, so the first visitor after a quiet spell no longer waits for a cold load. The 9B, 4B,
-# Qwen3-VL-4B, GPT-OSS 20B and Phi-4-mini were retired from the engine the same day.
-#
-# From 2026-09-13, same "median of four questions" method as before:
-#   gemma4-e4b     0.61 s   nothing needed          terse; the original "odd helpfulness" complaint
-#
-# Every Qwen generation here ships thinking ON by default and writes it into `content`, not
-# `reasoning_content` — so without the flag the assistant literally reads "Thinking Process: 1. Analyze
-# the Request" aloud. The engine also sets enable_thinking=false for the MoE server-side; the flag
-# stays here so the picker does not depend on that. Phi-4-mini was measured too (0.55 s) and left out:
-# it was the only model that got a plain recall question wrong.
-CHAT_CHOICES = [
-    {"id": "qwen3.6-35b-a3b",  "label": "Qwen3.6 35B MoE", "note": "best answers, ~0.7 s",
-     "extra": {"chat_template_kwargs": {"enable_thinking": False}}},
-    {"id": "gemma4-e4b-mlx",   "label": "Gemma 4 E4B",     "note": "~0.6 s, terse",     "extra": {}},
+# **Flags.** Every Qwen generation ships thinking ON and writes it into `content`, not `reasoning_content`,
+# so without the flag the assistant reads "Thinking Process: 1. Analyze the Request" aloud. Nemotron does the
+# same, and GPT-OSS spends its whole budget thinking unless the effort is capped. Matched by pattern, so a
+# model that arrives tomorrow is handled by family rather than by name.
+CHAT_FLAGS = [
+    (re.compile(r"qwen|nemotron", re.I), {"chat_template_kwargs": {"enable_thinking": False}}),
+    (re.compile(r"gpt-oss", re.I), {"reasoning_effort": "low"}),
 ]
-CHAT_BY_ID = {c["id"]: c for c in CHAT_CHOICES}
+
+# **Labels and measured speed**, for models that have been through the harness. Anything unlisted still
+# appears, under a tidied version of its id and with no claim about how fast it is.
+CHAT_KNOWN = {
+    "qwen3.6-35b-a3b": ("Qwen3.6 35B MoE", "best answers, ~0.5 s"),
+    "gemma4-e4b-mlx": ("Gemma 4 E4B", "~0.6 s, terse"),
+}
+
+# Transcription: the first of these the engine serves. Parakeet is ~0.1 s against Whisper-turbo's 0.5 s.
+STT_PREFERENCE = ["parakeet-tdt-0.6b-v2", "parakeet-v3", "whisper-turbo", "qwen3-asr-1.7b-8bit",
+                  "qwen3-asr-0.6b-8bit"]
+
+# A model the demo should not offer even while the engine still serves it.
+HIDDEN_MODELS = {m.strip() for m in os.environ.get("DEMO_HIDE_MODELS", "").split(",") if m.strip()}
+
+
+def pretty(model_id: str) -> str:
+    return re.sub(r"[-_]", " ", model_id).replace("mlx", "MLX").strip().title().replace("Mlx", "MLX")
+
+
+def chat_extra(model_id: str) -> dict:
+    extra: dict = {}
+    for pattern, flags in CHAT_FLAGS:
+        if pattern.search(model_id):
+            extra.update(flags)
+    return extra
+
+
 TTS_MODEL = os.environ.get("TTS_MODEL", "kokoro-tts")
 DAILY_BUDGET = int(os.environ.get("DAILY_BUDGET", "2000"))
 ENABLED = os.environ.get("DEMO_ENABLED", "1") != "0"
@@ -172,7 +184,7 @@ def _vibe(v: str) -> dict:
     return _v(v, label, _VIBE_LANG.get(lang, lang), "female" if gender == "woman" else "male")
 
 
-TTS_ENGINES = [
+ENGINE_CATALOGUE = [
     {"id": "kokoro-tts", "label": "Kokoro 82M", "note": "fastest, ~0.15 s a sentence", "default": "af_heart",
      "voices": voice_catalogue()},
     {"id": "pocket-tts", "label": "Pocket TTS · Kyutai", "note": "~0.25 s a sentence", "default": "alba",
@@ -188,12 +200,114 @@ TTS_ENGINES = [
     {"id": "qwen3-tts-0.6b", "label": "Qwen3-TTS 0.6B", "note": "~1 s a sentence", "default": "vivian",
      "voices": [_v(*q) for q in _QWEN]},
 ]
-ENGINE_BY_ID = {e["id"]: e for e in TTS_ENGINES}
+ENGINE_KNOWN = {e["id"]: e for e in ENGINE_CATALOGUE}
+
+
+class Catalogue:
+    """What the engine serves right now, refreshed in the background.
+
+    The demo used to carry its own list of models. It went stale twice in two days — models were retired,
+    others arrived, and the picker offered things that 400 while missing things that worked. Now the engine
+    decides what exists and this file only says what is known *about* what exists: the flag a family needs,
+    a measured note where there is one, and the voices each speech engine has (which no model list carries).
+
+    Aliases are dropped. The gateway answers retired names by routing them to their replacement, so
+    `Qwen3.8-27B-4bit` and `qwen3.6-35b-a3b` are the same model; offering both would be a lie.
+    """
+
+    def __init__(self) -> None:
+        self.chat: list[dict] = []
+        self.engines: list[dict] = []
+        self.stt = STT_MODEL
+        self.checked_at = 0.0
+        self.source = "not checked yet"
+
+    @property
+    def chat_default(self) -> str:
+        ids = [c["id"] for c in self.chat]
+        return CHAT_MODEL if CHAT_MODEL in ids else (ids[0] if ids else CHAT_MODEL)
+
+    @property
+    def tts_default(self) -> str:
+        ids = [e["id"] for e in self.engines]
+        return TTS_MODEL if TTS_MODEL in ids else (ids[0] if ids else TTS_MODEL)
+
+    def chat_choice(self, model_id: str | None) -> dict:
+        for c in self.chat:
+            if c["id"] == model_id:
+                return c
+        for c in self.chat:
+            if c["id"] == self.chat_default:
+                return c
+        # Nothing discovered (the first request beat the first refresh): answer with the configured default.
+        return {"id": self.chat_default, "label": pretty(self.chat_default), "note": "",
+                "extra": chat_extra(self.chat_default)}
+
+    def engine(self, engine_id: str | None) -> dict:
+        known = ENGINE_KNOWN.get(engine_id or "")
+        if known and any(e["id"] == known["id"] for e in self.engines):
+            return known
+        return ENGINE_KNOWN.get(self.tts_default) or ENGINE_CATALOGUE[0]
+
+    def adopt(self, served: dict[str, str | None], source: str) -> None:
+        """`served` maps a model id to its mode: None for chat, else audio_speech / audio_transcription / …"""
+        chat, engines = [], []
+        for model_id, mode in sorted(served.items()):
+            if model_id in HIDDEN_MODELS:
+                continue
+            if mode in (None, "", "chat", "completion"):
+                label, note = CHAT_KNOWN.get(model_id, (pretty(model_id), ""))
+                chat.append({"id": model_id, "label": label, "note": note, "extra": chat_extra(model_id)})
+            elif mode == "audio_speech" and model_id in ENGINE_KNOWN:
+                engines.append(ENGINE_KNOWN[model_id])   # the voices are knowledge, not discovery
+        # The configured default first, then the rest as the engine listed them.
+        chat.sort(key=lambda c: (c["id"] != CHAT_MODEL, c["id"]))
+        engines.sort(key=lambda e: [x["id"] for x in ENGINE_CATALOGUE].index(e["id"]))
+        heard = [m for m in STT_PREFERENCE if served.get(m) == "audio_transcription"]
+        if chat:
+            self.chat = chat
+        if engines:
+            self.engines = engines
+        self.stt = STT_MODEL if served.get(STT_MODEL) == "audio_transcription" else (heard[0] if heard else STT_MODEL)
+        self.checked_at, self.source = time.time(), source
+
+
+CATALOGUE = Catalogue()
+
+
+async def refresh_catalogue() -> None:
+    """Ask the endpoint what it serves. LiteLLM's /model/info carries the mode and the model behind each
+    name; a plain OpenAI endpoint only lists ids, so fall back to classifying those with what is known."""
+    try:
+        r = await upstream("GET", "/model/info")
+        rows = r.json().get("data") or []
+        served: dict[str, str | None] = {}
+        for row in rows:
+            name = row.get("model_name") or ""
+            behind = str((row.get("litellm_params") or {}).get("model") or "").split("/")[-1]
+            if not name or (behind and behind != name):
+                continue                      # an alias for something else, or an entry we cannot place
+            served[name] = (row.get("model_info") or {}).get("mode")
+        if served:
+            CATALOGUE.adopt(served, "/model/info")
+            return
+    except Exception:  # noqa: BLE001 — not every endpoint has it; /models always works
+        pass
+    try:
+        r = await upstream("GET", "/models")
+        ids = [m["id"] for m in r.json().get("data", []) if m.get("id")]
+        served = {i: ("audio_speech" if i in ENGINE_KNOWN else
+                      "audio_transcription" if i in STT_PREFERENCE else
+                      "embedding" if "embed" in i else
+                      "image_generation" if "image" in i else None) for i in ids}
+        CATALOGUE.adopt(served, "/models")
+    except Exception as e:  # noqa: BLE001 — keep whatever was discovered before
+        CATALOGUE.source = f"last check failed: {e}"
 
 
 def pick_voice(engine: str | None, voice: str | None) -> tuple[str, str]:
     """A known engine and one of its voices, or a 400 — the engine answers unknown voices with a 500 and a path."""
-    eng = ENGINE_BY_ID.get(engine or "") or ENGINE_BY_ID[TTS_MODEL if TTS_MODEL in ENGINE_BY_ID else "kokoro-tts"]
+    eng = CATALOGUE.engine(engine)
     voice = voice or eng["default"]
     if voice not in {v["id"] for v in eng["voices"]}:
         raise HTTPException(400, "That voice is not available.")
@@ -406,19 +520,22 @@ async def warm_forever() -> None:
         while True:
             try:
                 if BASE and KEY and ENABLED:
+                    await refresh_catalogue()
+                    tts = CATALOGUE.engine(None)
                     r = await upstream("POST", "/audio/speech",
-                                       json={"model": TTS_MODEL, "input": "ready", "voice": "af_heart",
+                                       json={"model": tts["id"], "input": "ready", "voice": tts["default"],
                                              "response_format": "wav"})
                     await upstream("POST", "/audio/transcriptions",
                                    files={"file": ("warm.wav", r.content, "audio/wav")},
-                                   data={"model": STT_MODEL})
+                                   data={"model": CATALOGUE.stt})
                     await upstream("POST", "/chat/completions",
-                                   json={"model": CHAT_MODEL, "max_tokens": 1,
+                                   json={"model": CATALOGUE.chat_default, "max_tokens": 1,
                                          "messages": [{"role": "user", "content": "hi"}]})
             except Exception:
                 pass  # the demo degrades to a cold start, which is not worth crashing over
             await asyncio.sleep(240)
 
+    asyncio.create_task(refresh_catalogue())
     asyncio.create_task(loop())
     asyncio.create_task(asyncio.to_thread(smart_turn))
 
@@ -442,7 +559,12 @@ def favicon() -> Response:
 def health() -> JSONResponse:
     return JSONResponse({"ok": True, "enabled": ENABLED, "configured": bool(BASE and KEY),
                          "served_today": _day[1], "budget": DAILY_BUDGET, "smart_turn": smart_turn() is not None,
-                         "models": {"stt": STT_MODEL, "chat": CHAT_MODEL, "tts": TTS_MODEL}})
+                         "models": {"stt": CATALOGUE.stt, "chat": CATALOGUE.chat_default,
+                                    "tts": CATALOGUE.tts_default},
+                         "catalogue": {"chat": [c["id"] for c in CATALOGUE.chat],
+                                       "speech": [e["id"] for e in CATALOGUE.engines],
+                                       "from": CATALOGUE.source,
+                                       "checked": round(time.time() - CATALOGUE.checked_at) if CATALOGUE.checked_at else None}})
 
 
 PREVIEW_TEXT = "This is how I sound."
@@ -475,21 +597,20 @@ def whoami(request: Request) -> JSONResponse:
 
 @app.get("/api/models")
 def models() -> JSONResponse:
-    default = CHAT_MODEL if CHAT_MODEL in CHAT_BY_ID else CHAT_CHOICES[0]["id"]
-    return JSONResponse({"default": default,
-                         "models": [{k: c[k] for k in ("id", "label", "note")} for c in CHAT_CHOICES]})
+    return JSONResponse({"default": CATALOGUE.chat_default,
+                         "models": [{k: c[k] for k in ("id", "label", "note")} for c in CATALOGUE.chat]})
 
 
 @app.get("/api/voices")
-def voices(engine: str = Query("kokoro-tts")) -> JSONResponse:
-    eng = ENGINE_BY_ID.get(engine) or ENGINE_BY_ID["kokoro-tts"]
+def voices(engine: str = Query("")) -> JSONResponse:
+    eng = CATALOGUE.engine(engine)
     return JSONResponse({"engine": eng["id"], "default": eng["default"], "voices": eng["voices"]})
 
 
 @app.get("/api/engines")
 def engines() -> JSONResponse:
-    return JSONResponse({"default": "kokoro-tts",
-                         "engines": [{k: e[k] for k in ("id", "label", "note", "default")} for e in TTS_ENGINES]})
+    return JSONResponse({"default": CATALOGUE.tts_default,
+                         "engines": [{k: e[k] for k in ("id", "label", "note", "default")} for e in CATALOGUE.engines]})
 
 
 @app.post("/api/transcribe")
@@ -501,7 +622,7 @@ async def transcribe(request: Request, audio: UploadFile, seconds: float = Form(
     t0 = time.time()
     r = await upstream("POST", "/audio/transcriptions",
                        files={"file": ("clip.wav", blob, "audio/wav")},
-                       data={"model": STT_MODEL})
+                       data={"model": CATALOGUE.stt})
     took = time.time() - t0
     d = r.json()
     text = (d.get("text") or "").strip()
@@ -514,7 +635,7 @@ async def transcribe(request: Request, audio: UploadFile, seconds: float = Form(
     return JSONResponse({"text": text, "segments": segments, "seconds": round(took, 2),
                          "audio_seconds": round(seconds, 2),
                          "realtime": round(seconds / took, 1) if took > 0 and seconds else None,
-                         "model": STT_MODEL})
+                         "model": CATALOGUE.stt})
 
 
 @app.post("/api/reply")
@@ -526,7 +647,7 @@ async def reply(request: Request, payload: dict) -> JSONResponse:
     # A spoken conversation needs the last few turns or every answer restarts from nothing. Capped hard:
     # the client is untrusted, and an unbounded history is a way to make someone else's GPU do free work.
     history = clean_history(payload.get("history"))
-    choice = CHAT_BY_ID.get(payload.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
+    choice = CATALOGUE.chat_choice(payload.get("model"))
     t0 = time.time()
     r = await upstream("POST", "/chat/completions", json={
         "model": choice["id"], "max_tokens": 220, "temperature": 0.4, **choice["extra"],
@@ -554,7 +675,7 @@ async def speak(request: Request, payload: dict) -> Response:
         # The engine answers an unknown voice with a 500 quoting a filesystem path, so catch it here.
         raise HTTPException(400, "That voice is not available.")
     t0 = time.time()
-    r = await upstream("POST", "/audio/speech", json={"model": TTS_MODEL, "input": text,
+    r = await upstream("POST", "/audio/speech", json={"model": CATALOGUE.tts_default, "input": text,
                                                       "voice": voice, "response_format": "wav"})
     return Response(r.content, media_type="audio/wav",
                     headers={"X-Synthesis-Seconds": str(round(time.time() - t0, 2))})
@@ -596,7 +717,7 @@ async def backchannel(request: Request, audio: UploadFile, said: str = Form(""))
         return JSONResponse({"verdict": "interrupt", "text": "", "reason": "long"})
     t0 = time.time()
     r = await upstream("POST", "/audio/transcriptions", files={"file": ("clip.wav", blob, "audio/wav")},
-                       data={"model": STT_MODEL})
+                       data={"model": CATALOGUE.stt})
     text = (r.json().get("text") or "").strip()
     verdict = backchannel_verdict(text, said)
     count("voice_backchannel_total", verdict)
@@ -606,7 +727,7 @@ async def backchannel(request: Request, audio: UploadFile, said: str = Form(""))
 ENUMS = {"reply": {"eager", "stream", "whole"}, "turn": {"smart", "pause"}, "barge": {"smart", "instant", "off"},
          "fillers": {"off", "tone", "words"},
          "outcome": {"done", "interrupted", "continued", "reopened", "ignored", "timeout", "error"},
-         "engine": {e["id"] for e in TTS_ENGINES}}
+         "engine": {e["id"] for e in ENGINE_CATALOGUE}}
 _metric_posts: dict[str, deque] = defaultdict(deque)
 
 
@@ -735,7 +856,7 @@ async def talk(request: Request, meta: str = Form("{}"), audio: UploadFile | Non
     if not blob and not typed:
         raise HTTPException(400, "Nothing to answer.")
     engine, voice = pick_voice(opts.get("engine"), opts.get("voice"))
-    choice = CHAT_BY_ID.get(opts.get("model") or "") or CHAT_BY_ID.get(CHAT_MODEL) or CHAT_CHOICES[0]
+    choice = CATALOGUE.chat_choice(opts.get("model"))
     mode = {"whole": "whole", "eager": "eager"}.get(opts.get("mode"), "stream")
     history = clean_history(opts.get("history"))
     # Speech from a turn that was cut off before it was answered, so "what is the tallest… (pause) …
@@ -754,7 +875,7 @@ async def talk(request: Request, meta: str = Form("{}"), audio: UploadFile | Non
             # verdict the text is ready by the time the 600 ms wait ends.
             stt_task = None
             if blob:
-                stt_task = asyncio.create_task(http.post(f"{BASE}/audio/transcriptions", data={"model": STT_MODEL},
+                stt_task = asyncio.create_task(http.post(f"{BASE}/audio/transcriptions", data={"model": CATALOGUE.stt},
                                                          files={"file": ("clip.wav", blob, "audio/wav")}))
                 tasks.append(stt_task)
             if blob and use_smart:
@@ -797,7 +918,7 @@ async def talk(request: Request, meta: str = Form("{}"), audio: UploadFile | Non
                             for g in (d.get("segments") or []) if (g.get("text") or "").strip()]
                 stt = since()
                 yield sse("heard", text=heard, segments=segments, at=stt,
-                          realtime=round(seconds / stt, 1) if seconds and stt else None, model=STT_MODEL)
+                          realtime=round(seconds / stt, 1) if seconds and stt else None, model=CATALOGUE.stt)
             if not heard:
                 yield sse("done", at=since())
                 return

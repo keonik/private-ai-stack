@@ -247,31 +247,35 @@ docker build -t voice-demo . && docker run -p 8080:8080 \
 | `DAILY_BUDGET` | `2000` | requests per UTC day before the demo closes itself |
 | `DEMO_ENABLED` | `1` | set to `0` to take it down without redeploying |
 
-## Models, and why each needs a different flag
+## Models: discovered, not listed
 
-Two models in the picker. The default changed on 2026-09-18 to a mixture-of-experts model: same
-harness, five voice-shaped questions, reply capped at 80 tokens, streamed:
+The demo used to carry its own list of models. It went stale twice in two days — models were retired,
+others arrived, and the picker offered names that 400 while missing ones that worked. **The engine decides
+what exists now.** On startup and every four minutes the app asks the endpoint what it serves and rebuilds
+the picker, the speech engines and the transcription model from the answer.
 
-| model | first word | full turn | flag it needs |
-|---|---|---|---|
-| **Qwen3.6 35B MoE** (default) | 0.26 s | **0.70 s** | `enable_thinking: false` |
-| Qwen3.5 9B (previous default, retired) | 0.26 s | 1.07 s | `enable_thinking: false` |
+What stays in the code is only what a model list cannot tell you:
 
-It activates ~3B parameters per token, so it turns around as fast as a 4B model while being the model
-that tied a dense 27B on 707 mechanically checked items. It is also pinned on the engine, so a quiet
-spell no longer ends in a cold load for the next visitor. The other, from the 2026-09-13 run (median
-of four questions: a capability question, one to refuse, a recall of the previous turn, a plain
-explanation):
+| kept here | why |
+|---|---|
+| **Flags, by family** — `enable_thinking: false` for `qwen`/`nemotron`, `reasoning_effort: low` for `gpt-oss` | every Qwen generation ships thinking on and writes it into `content`, so without the flag the assistant reads *"Thinking Process: 1. Analyze the Request"* aloud. Matched by pattern, so a new model in a known family is handled on arrival |
+| **Labels and measured speed** for models that went through the harness | `qwen3.6-35b-a3b` is "Qwen3.6 35B MoE, best answers, ~0.5 s". Anything unlisted still appears, under a tidied id and with no claim about its speed |
+| **Voices per speech engine** | no model list carries them, and an unknown voice comes back as a 500 quoting a filesystem path |
+| **Transcription preference** | Parakeet at ~0.1 s over Whisper-turbo at ~0.5 s, whichever is served |
 
-| model | median | flag it needs | without the flag |
-|---|---|---|---|
-| Gemma 4 E4B | 0.61 s | none | — |
+**Aliases are dropped.** The gateway answers retired names by routing them to their replacement, so
+`Qwen3.8-27B-4bit` and `qwen3.6-35b-a3b` are one model; offering both would be a lie. LiteLLM's
+`/model/info` gives each name's `mode` and the model behind it, which is how aliases, embeddings and the
+image model are told apart from things you can talk to. Pointed at a plain OpenAI endpoint that has no such
+route, it falls back to `/v1/models` and classifies the ids with what it knows.
 
-**Every Qwen generation ships thinking on and writes it into `content`, not `reasoning_content`.** That
-one fact explains most of what looks like a model being strange out loud. Two other fixes live here:
-the budget is **220 tokens**, not 120, because three spoken sentences were being cut mid-word; and
-`reasoning_content` is never spoken — if a model thinks but returns no content, the request fails
-cleanly rather than narrating deliberation.
+`DEMO_HIDE_MODELS` drops a model from the picker while the engine still serves it. `/api/health` reports
+what was discovered, where from, and how long ago. The picker only appears when there is more than one
+model to choose between.
+
+The budget is **220 tokens**, not 120, because three spoken sentences were being cut mid-word, and
+`reasoning_content` is never spoken — if a model thinks but returns no content the request fails cleanly
+rather than narrating deliberation.
 
 **Measured and rejected.** Phi-4-mini is quick (0.55 s) and was the only model to get a plain recall
 question wrong, answering what it was rather than what it had just been told. Qwen3.5 4B/9B, Qwen3 VL
