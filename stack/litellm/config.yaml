@@ -13,17 +13,17 @@ model_list:
   - model_name: local/chat
     litellm_params:
       model: openai/qwen3.6-35b-a3b
-      api_base: os.environ/OMLX_BASE_URL
+      api_base: os.environ/QWEN_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/chat-small
     litellm_params:
       model: openai/qwen3.6-35b-a3b
-      api_base: os.environ/OMLX_BASE_URL
+      api_base: os.environ/QWEN_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/chat-code
     litellm_params:
       model: openai/qwen3.6-35b-a3b
-      api_base: os.environ/OMLX_BASE_URL
+      api_base: os.environ/QWEN_BASE_URL
       api_key: os.environ/OMLX_API_KEY
   - model_name: local/embed
     litellm_params:
@@ -44,7 +44,7 @@ model_list:
   # math 96.0 = 96.0, MMLU-Pro 67.3 vs 64.6 at p=0.27). MTP on, thinking off.
   # Harness and results: offbyone-ai/benchmarks, llm-quality/.
   - model_name: qwen3.6-35b-a3b
-    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
 
   # Retired names, kept as aliases to the replacement so a client asking for
   # them gets an answer rather than a 404. Neither 27B build is served any more:
@@ -52,13 +52,13 @@ model_list:
   # MoE above. The demo no longer offers either by name; these stay for anything
   # else that still asks for them.
   - model_name: Qwen3.8-27B-4bit
-    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder
-    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # gemma4-e4b-mlx was retired 2026-09-19 (Qwen reads CAPTCHAs ~88% vs its ~68%). The name stays as an
   # alias because a remote gameplan pipeline (key: timbit) still asks for it until its config is updated.
   - model_name: gemma4-e4b-mlx
-    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: embeddinggemma-300m
     litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: embedding }

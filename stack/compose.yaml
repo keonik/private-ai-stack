@@ -41,6 +41,9 @@ services:
       OLLAMA_BASE_URL: *ollama_url
       OMLX_BASE_URL: ${OMLX_BASE_URL:-http://host.docker.internal:8000/v1}
       OMLX_API_KEY: ${OMLX_API_KEY:-unused}
+      # The Qwen chat/vision names can be served by a different engine than the rest of oMLX
+      # (mlx-serve on this host since 2026-09-19). Unset, they follow OMLX_BASE_URL.
+      QWEN_BASE_URL: ${QWEN_BASE_URL:-${OMLX_BASE_URL:-http://host.docker.internal:8000/v1}}
       UI_USERNAME: ${LITELLM_UI_USERNAME:-admin}
       UI_PASSWORD: ${LITELLM_UI_PASSWORD:-${LITELLM_MASTER_KEY}}
     volumes:
