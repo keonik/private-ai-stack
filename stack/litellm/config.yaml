@@ -55,10 +55,6 @@ model_list:
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
-  # gemma4-e4b-mlx was retired 2026-09-19 (Qwen reads CAPTCHAs ~88% vs its ~68%). The name stays as an
-  # alias because a remote gameplan pipeline (key: timbit) still asks for it until its config is updated.
-  - model_name: gemma4-e4b-mlx
-    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # Back on the engine 2026-09-20 at 6-bit (the retired build was 4-bit), to compare real-world answer
   # quality against the MoE. Dense: ~32 s to read an 8k prompt, so it is opt-in by name, never an alias.
   - model_name: qwen3.8-27b
