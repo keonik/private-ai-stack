@@ -62,8 +62,10 @@ model_list:
   # which is why it is opt-in rather than behind local/chat.
   - model_name: gemma4-26b-a4b
     litellm_params: { model: openai/gemma4-26b-a4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  # Both names serve the 4-bit build: it matched the 6-bit exactly on code and math (94.4% vs 94.4%) at
+  # 2.5x the decode speed, so the 6-bit was retired 2026-09-22.
   - model_name: qwen3.8-27b
-    litellm_params: { model: openai/qwen3.8-27b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+    litellm_params: { model: openai/qwen3.8-27b-4bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # Same model at 4-bit with speculative heads in the checkpoint: 52 tok/s against the 6-bit's 21, same
   # ~30 s to read a cold 8k prompt. Quantised harder, so it is here to be compared, not assumed equal.
   - model_name: qwen3.8-27b-4bit
