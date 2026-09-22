@@ -59,6 +59,10 @@ model_list:
   # quality against the MoE. Dense: ~32 s to read an 8k prompt, so it is opt-in by name, never an alias.
   - model_name: qwen3.8-27b
     litellm_params: { model: openai/qwen3.8-27b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  # Same model at 4-bit with speculative heads in the checkpoint: 52 tok/s against the 6-bit's 21, same
+  # ~30 s to read a cold 8k prompt. Quantised harder, so it is here to be compared, not assumed equal.
+  - model_name: qwen3.8-27b-4bit
+    litellm_params: { model: openai/qwen3.8-27b-4bit, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: embeddinggemma-300m
     litellm_params: { model: openai/embeddinggemma-300m, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
     model_info: { mode: embedding }
