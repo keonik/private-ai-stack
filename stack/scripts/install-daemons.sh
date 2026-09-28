@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the agents in launchd/daemons/ as system daemons, so they run from boot with nobody logged in.
+# Install the agents in launchd/daemons/ (and the gitignored local/launchd/daemons/) as system daemons, so they run from boot with nobody logged in.
 #
 #   ./scripts/install-daemons.sh          # render, then print the one sudo command to run
 #   sudo ./scripts/install-daemons.sh go  # do it (retires the matching user agents first)
@@ -19,7 +19,8 @@ DEST=/Library/LaunchDaemons
 
 render() {
   mkdir -p "$RENDER"
-  for f in launchd/daemons/*.plist; do
+  for f in launchd/daemons/*.plist local/launchd/daemons/*.plist; do
+    [ -e "$f" ] || continue
     sed -e "s|__STACK__|$STACK|g" -e "s|__HOME__|$HOME_DIR|g" -e "s|__USER__|$OWNER|g" "$f" > "$RENDER/$(basename "$f")"
     plutil -lint "$RENDER/$(basename "$f")" > /dev/null
   done
@@ -28,7 +29,8 @@ render() {
 case "${1:-}" in
   remove)
     [ "$(id -u)" = 0 ] || { echo "needs sudo"; exit 1; }
-    for f in launchd/daemons/*.plist; do
+    for f in launchd/daemons/*.plist local/launchd/daemons/*.plist; do
+      [ -e "$f" ] || continue
       label=$(basename "$f" .plist)
       launchctl bootout "system/$label" 2>/dev/null || true
       rm -f "$DEST/$label.plist"

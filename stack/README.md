@@ -263,7 +263,9 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
 - `dev.private-ai-stack.keepalive` — every 2 min: first `colima-doctor.sh` (below), then
   `docker compose up -d` if any service is not running. It does nothing when Docker itself is down (stopping Docker is a person's decision, not
   a script's). Verified by stopping a service by hand: back within one tick.
-- `dev.private-ai-stack.docker-boot` — once at login: if the Docker engine is unreachable it runs
+- `dev.private-ai-stack.docker-boot` — **superseded where colima runs as a daemon** (`com.offbyone.colima`
+  starts the VM at boot with KeepAlive, and the keepalive daemon brings compose up every 2 minutes). Kept for
+  machines without it, retired here on 2026-09-28. Once at login: if the Docker engine is unreachable it runs
   `colima start` (Homebrew's colima is not a login service by default, so nothing came back after a
   reboot), waits for the engine, then brings the stack up. It only ever starts the engine when it is
   already down, so a deliberate `colima stop` during the day stays stopped. On a Docker Desktop machine
@@ -293,6 +295,9 @@ set — launchd gives a daemon neither, and as root they would read `/var/root` 
 | `dev.private-ai-stack.infer-gateway` | the key gateway in front of it |
 | `com.offbyone.colima` | the Docker VM (predates these) |
 | host-metrics, keepalive, deployer, backup | `./scripts/install-daemons.sh go` |
+
+The installer also picks up `local/launchd/daemons/*.plist`, the gitignored overlay, so jobs belonging to
+other projects on this machine get the same treatment without appearing in this repo.
 
 ```sh
 ./scripts/install-daemons.sh              # render and lint, print the sudo line
