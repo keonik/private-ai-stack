@@ -529,13 +529,13 @@
      "uid": "pas-swap",
      "title": "The Mac is swapping",
      "condition": "C",
-     "for": "15m",
+     "for": "10m",
      "labels": {
       "severity": "warning"
      },
      "annotations": {
-      "summary": "Swap in use is {{ $values.A.Value | humanize1024 }}B",
-      "description": "A machine serving models should not swap. Something is over-committed: check the Memory panel and which models are loaded."
+      "summary": "Swap grew by {{ $values.A.Value | humanize1024 }}B in half an hour",
+      "description": "Something is over-committed. Check which models are resident (/v1/models/status): a model with no ttl_seconds stays loaded forever once used, which is what caused the 52 GB of swap on 2026-09-28."
      },
      "data": [
       {
@@ -547,7 +547,7 @@
        "datasourceUid": "prom",
        "model": {
         "refId": "A",
-        "expr": "host_swap_used_bytes",
+        "expr": "delta(host_swap_used_bytes[30m])",
         "instant": true,
         "intervalMs": 15000,
         "maxDataPoints": 100
@@ -565,7 +565,71 @@
           "evaluator": {
            "type": "gt",
            "params": [
-            8000000000.0
+            1000000000.0
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
+     "uid": "pas-pressure",
+     "title": "macOS reports memory pressure",
+     "condition": "C",
+     "for": "10m",
+     "labels": {
+      "severity": "warning"
+     },
+     "annotations": {
+      "summary": "Memory pressure level {{ $values.A.Value | printf \"%.0f\" }} (0 normal, 1 warning, 2 critical)",
+      "description": "The machine is compressing or paging to keep up. Unload a model or shrink the Docker VM."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "host_memory_pressure_level",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gte",
+           "params": [
+            2
            ]
           },
           "operator": {

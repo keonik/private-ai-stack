@@ -58,10 +58,16 @@ RULES = [
          "The Mac's disk is {{ $values.A.Value | humanizePercentage }} full",
          "Everything on this machine stops when the boot volume fills: models, Docker, backups. `docker system prune` "
          "and stack/backups are the usual places to reclaim space."),
-    rule("pas-swap", "The Mac is swapping", "host_swap_used_bytes", "gt", 8e9, "15m", "warning",
-         "Swap in use is {{ $values.A.Value | humanize1024 }}B",
-         "A machine serving models should not swap. Something is over-committed: check the Memory panel and which "
-         "models are loaded."),
+    # Swap *in use* is the wrong signal: macOS leaves pages in the swapfile long after the pressure is gone
+    # (measured draining at 0.4 GB every two hours), so a one-off squeeze would page someone for days about a
+    # machine that is fine. What matters is swapping happening now, and what macOS itself says about pressure.
+    rule("pas-swap", "The Mac is swapping", "delta(host_swap_used_bytes[30m])", "gt", 1e9, "10m", "warning",
+         "Swap grew by {{ $values.A.Value | humanize1024 }}B in half an hour",
+         "Something is over-committed. Check which models are resident (/v1/models/status): a model with no "
+         "ttl_seconds stays loaded forever once used, which is what caused the 52 GB of swap on 2026-09-28."),
+    rule("pas-pressure", "macOS reports memory pressure", "host_memory_pressure_level", "gte", 2, "10m", "warning",
+         "Memory pressure level {{ $values.A.Value | printf \"%.0f\" }} (0 normal, 1 warning, 2 critical)",
+         "The machine is compressing or paging to keep up. Unload a model or shrink the Docker VM."),
     rule("pas-host-metrics-down", "Host metrics exporter down", "up{job=\"host\"}", "lt", 1, "10m", "warning",
          "No disk or memory readings from the Mac",
          "launchctl list | grep host-metrics; the agent is dev.private-ai-stack.host-metrics."),
