@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Daemon copy of the user agent of the same name. A LaunchAgent only loads once somebody logs in: on
+     2026-09-28 this Mac rebooted to the login window and the whole stack stayed down for three hours while
+     the tunnels and colima (already a daemon) carried on. Runs as the user whose files these are, with HOME
+     set, because launchd gives a daemon neither. Install with scripts/install-daemons.sh. -->
+<plist version="1.0"><dict>
+    <key>Label</key><string>dev.private-ai-stack.host-metrics</string>
+    <!-- Disk, memory and load as macOS counts them, scraped by Prometheus on :9419. A daemon because the
+         alerts that read it are the ones that should still work when nobody is logged in. -->
+    <key>ProgramArguments</key><array>
+      <string>/usr/bin/python3</string>
+      <string>__STACK__/observability/host-metrics/exporter.py</string>
+    </array>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>10</integer>
+    <key>UserName</key><string>__USER__</string>
+    <key>GroupName</key><string>staff</string>
+    <key>WorkingDirectory</key><string>__STACK__</string>
+    <key>EnvironmentVariables</key><dict>
+      <key>PATH</key><string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      <key>HOME</key><string>__HOME__</string>
+    
+      <key>PORT</key><string>9419</string>
+    </dict>
+    <key>StandardOutPath</key><string>__HOME__/Library/Logs/private-ai-stack.host-metrics.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/Library/Logs/private-ai-stack.host-metrics.log</string>
+</dict></plist>

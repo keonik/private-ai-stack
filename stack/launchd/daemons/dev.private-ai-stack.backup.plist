@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Daemon copy of the user agent of the same name. A LaunchAgent only loads once somebody logs in: on
+     2026-09-28 this Mac rebooted to the login window and the whole stack stayed down for three hours while
+     the tunnels and colima (already a daemon) carried on. Runs as the user whose files these are, with HOME
+     set, because launchd gives a daemon neither. Install with scripts/install-daemons.sh. -->
+<plist version="1.0"><dict>
+    <key>Label</key><string>dev.private-ai-stack.backup</string>
+    <!-- 03:15 nightly, 7 kept. A machine that reboots at 02:00 and waits for a login skips its backup. -->
+    <key>ProgramArguments</key><array>
+      <string>/bin/bash</string>
+      <string>__STACK__/scripts/backup.sh</string>
+    </array>
+    <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>15</integer></dict>
+    <key>UserName</key><string>__USER__</string>
+    <key>GroupName</key><string>staff</string>
+    <key>WorkingDirectory</key><string>__STACK__</string>
+    <key>EnvironmentVariables</key><dict>
+      <key>PATH</key><string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+      <key>HOME</key><string>__HOME__</string>
+    </dict>
+    <key>StandardOutPath</key><string>__HOME__/Library/Logs/private-ai-stack.backup.log</string>
+    <key>StandardErrorPath</key><string>__HOME__/Library/Logs/private-ai-stack.backup.log</string>
+</dict></plist>

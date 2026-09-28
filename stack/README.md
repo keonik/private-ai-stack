@@ -276,6 +276,38 @@ reports and 30 animal matches; `admin` → everything; file removed → unrestri
 Note that the engine is shared with anything else on the machine that uses Docker, so these agents start
 that too. `./scripts/install-launchd.sh remove` uninstalls them all.
 
+### Agents, and why the important ones are daemons
+
+A LaunchAgent only loads once somebody logs in. On **2026-09-28** this Mac rebooted to the login window and
+nobody noticed for three hours: `infer.offbyone.ai` returned 502 the whole time, while the Cloudflare tunnels
+and colima — already a daemon — carried on as if nothing was wrong. From a Background session (ssh, or an
+agent shell) you cannot start a user agent at all: `launchctl bootstrap gui/<uid>` answers *"Domain does not
+support specified action"*, and a GUI app cannot be launched either.
+
+So the jobs that serve the public run as **system daemons**, as the user who owns their files, with `HOME`
+set — launchd gives a daemon neither, and as root they would read `/var/root` instead:
+
+| daemon | what it is |
+|---|---|
+| `dev.private-ai-stack.omlx` | the engine, `omlx serve`. Metal works fine from a daemon — verified generating with nobody logged in |
+| `dev.private-ai-stack.infer-gateway` | the key gateway in front of it |
+| `com.offbyone.colima` | the Docker VM (predates these) |
+| host-metrics, keepalive, deployer, backup | `./scripts/install-daemons.sh go` |
+
+```sh
+./scripts/install-daemons.sh              # render and lint, print the sudo line
+sudo ./scripts/install-daemons.sh go      # retire each user agent, install and load the daemon
+sudo ./scripts/install-daemons.sh remove  # back to agents
+```
+
+**Do not `sudo brew services start omlx`.** That runs the engine as root: it reads `/var/root/.omlx`, so it
+came up on :8000 with an empty model list while the real one served on :8002, and brew took root ownership
+of `/opt/homebrew/opt/omlx` and `Cellar/omlx/*/libexec/bin` (undo with `chown` before a `brew upgrade`).
+
+The oMLX **GUI app is no longer in login items**: it can only run inside a login session, and it fought the
+daemon for :8002. Its `local.infer-watchdog` agent is retired too — it only ever acted when the app was
+running without its server, which the daemon's `KeepAlive` now covers.
+
 ### When colima dies from the outside in
 
 `scripts/colima-doctor.sh` (run by keepalive) exists for one specific failure, seen on 2026-09-15: the VM
