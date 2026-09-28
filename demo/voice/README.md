@@ -282,6 +282,28 @@ question wrong, answering what it was rather than what it had just been told. Qw
 4B, GPT-OSS 20B and the dense Qwen3.8 27B were in the picker until 2026-09-18 and are gone from the engine; a stale
 choice from an open tab falls back to the default rather than failing.
 
+### One model instead of three, measured
+
+The pipeline here is three models — transcribe, answer, speak. The alternative is one model that hears and
+speaks directly, and **LFM2.5-Audio-1.5B** is the first that runs on this Mac (mlx-audio 0.5.5, 21 Sep 2026,
+`mlx-community/LFM2.5-Audio-1.5B-4bit`). Tried on 2026-09-28, same machine, same spoken question:
+
+| | this pipeline | LFM2.5-Audio 1.5B |
+|---|---|---|
+| first token of the answer | ~1.1 s | **0.08 s** |
+| first audio | ~2.1 s after you stop | **0.22 s** |
+| whole turn | ~2-3 s | ~14 s (400-token budget) |
+| the answer | *"The sky appears blue because molecules in the atmosphere scatter shorter blue wavelengths more than longer red ones."* | *"The sky appears blue because the ones you see are actually scattered by tiny molecules in the Earth、 "Rayleigh scattering" – them scatter shorter wavelengths…"* |
+
+It starts speaking in a fifth of a second, which is the whole appeal, and then says something a bit wrong in
+a way a 1.5B model says things. Two practical snags as of mlx-audio 0.5.7: the CLI does not dispatch this
+model type at all (`Cannot detect model type`), and assembling the generator's audio frames into a clip is
+left to the caller — the obvious stacking produced a 28.6 s file for a two-sentence answer, intelligible for
+about five seconds and then not.
+
+Worth revisiting when a bigger one lands or the wiring is finished; not a replacement for a pipeline whose
+LLM can be swapped for whatever the engine is serving that week.
+
 ## Voices
 
 Kokoro ships 54 voice files. **41 synthesise on this engine; all 13 Japanese and Chinese ones return
