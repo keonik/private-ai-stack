@@ -61,3 +61,26 @@ test("a typed message is answered without touching the microphone", async ({ pag
   expect(await pane.evaluate((el) => getComputedStyle(el).overflowY)).toBe("auto");
   expect(errors, `page errors: ${errors.join(" | ")}`).toHaveLength(0);
 });
+
+test("a code typed into the page lifts the limit", async ({ page }) => {
+  const code = process.env.APP_CODE;
+  test.skip(!code, "set APP_CODE to a live access code to run this");
+  await page.goto(APP);
+  await expect(page.getByRole("button", { name: /have a code/i })).toBeVisible();
+  await page.getByRole("button", { name: /have a code/i }).click();
+  await page.getByRole("textbox", { name: /access code/i }).fill(code!.toLowerCase());  // read forgivingly
+  await page.getByRole("button", { name: /^use$/i }).click();
+  await expect(page.getByText(/tester pass ·/)).toBeVisible({ timeout: 10_000 });
+  // and it survives a reload, because the page keeps it
+  await page.reload();
+  await expect(page.getByText(/tester pass ·/)).toBeVisible({ timeout: 10_000 });
+});
+
+test("a wrong code says so and changes nothing", async ({ page }) => {
+  await page.goto(APP);
+  await page.getByRole("button", { name: /have a code/i }).click();
+  await page.getByRole("textbox", { name: /access code/i }).fill("NOPENOPE");
+  await page.getByRole("button", { name: /^use$/i }).click();
+  await expect(page.getByText(/not recognised|try again in a few minutes/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/tester pass ·/)).toHaveCount(0);
+});

@@ -15,7 +15,8 @@ ENV_FILE=${DEMO_ENV_FILE:-$HOME/.config/deployer/env/voice-demo.env}
 DEPLOYER=${DEPLOYER:-$HOME/private-ai-stack/stack/deployer/deployer.py}
 SITE=${DEMO_URL:-https://voice.jfay.dev}
 
-current() { grep -E '^DEMO_PASSES=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true; }
+current() { (grep -E '^DEMO_PASSES=' "$ENV_FILE" 2>/dev/null || true) | head -1 | cut -d= -f2-; }
+without() { (current | tr ',' '\n' | grep -v -E "^$1:" || true) | grep -v '^$' | paste -sd, -; }
 write() {  # $1 = the new DEMO_PASSES value
   local tmp; tmp=$(mktemp)
   grep -v -E '^DEMO_PASSES=' "$ENV_FILE" > "$tmp" || true
@@ -31,7 +32,7 @@ case "${1:-}" in
     exit 0 ;;
   --revoke|-r)
     name=${2:?which code?}
-    left=$(current | tr ',' '\n' | grep -v -E "^$name:" | paste -sd, -)
+    left=$(without "$name")
     write "$left"; echo "revoked $name"; deploy; exit 0 ;;
   "" ) sed -n '3,9p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
@@ -39,8 +40,8 @@ esac
 name=$(echo "$1" | tr -cd 'A-Za-z0-9_-')
 [ -n "$name" ] || { echo "a name is needed, e.g. ./new-code.sh gray"; exit 2; }
 # Four-and-four from an alphabet without look-alikes (no O/0, I/1), so it survives being read out loud.
-code=${2:-$(LC_ALL=C tr -dc 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' < /dev/urandom | head -c 8)}
-existing=$(current | tr ',' '\n' | grep -v -E "^$name:" | paste -sd, -)
+code=${2:-$(LC_ALL=C tr -dc 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' < /dev/urandom 2>/dev/null | head -c 8 || true)}
+existing=$(without "$name")
 write "$(echo "$existing,$name:$code" | sed 's/^,//')"
 echo "code for $name:"
 echo
