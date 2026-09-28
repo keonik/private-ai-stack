@@ -316,6 +316,13 @@ answers**, because clicking through the voice picker spent a request per preview
 **Voice previews are cached.** Every voice says the same sentence, so it is synthesised once and then
 served from memory — 6 s cold, 1.7 ms after. A cached preview is not rate-limited at all.
 
+**Codes.** `./new-code.sh gray` mints one, puts it in the deployment's env file and redeploys, which takes
+about half a minute; `--list` shows who has one and `--revoke` takes it away. A code can be typed into
+*"have a code?"* on the page or opened as a link, and it is read forgivingly — case, spaces and hyphens are
+ignored, and the alphabet has no O/0 or I/1 — because a code that cannot be read down a phone is not much
+use. Wrong guesses are counted per address and cut off after twelve in ten minutes, since a code short
+enough to read out loud is short enough to try.
+
 **Tester passes** are for people you want to hand the demo to without them running into the limit.
 `DEMO_PASSES="alice:<token>,bob:<token>"` in the deployment's environment; give someone
 `https://…/?pass=<token>`. The page keeps the pass in that browser, **strips it from the address bar**

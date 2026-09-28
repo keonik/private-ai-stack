@@ -157,7 +157,7 @@ const remember = (k: string, v: string) => {
 
 // A tester pass arrives once as ?pass=… in a link, is kept in this browser, and is removed from the
 // address bar straight away so it does not end up in a screenshot or a shared URL.
-const PASS = (() => {
+let PASS = (() => {
   const url = new URL(window.location.href);
   const fromLink = url.searchParams.get("pass");
   if (fromLink) {
@@ -171,6 +171,20 @@ const PASS = (() => {
 // Every API call carries the pass if there is one; nothing else about the request changes.
 const api = (input: string, init: RequestInit = {}) =>
   fetch(input, { ...init, headers: { ...(init.headers ?? {}), ...(PASS ? { "x-demo-pass": PASS } : {}) } });
+
+/** A code typed into the page. Checked by asking who we are with it; kept only if the answer is somebody. */
+async function useCode(code: string): Promise<{ ok: boolean; name?: string; message?: string }> {
+  const trimmed = code.trim();
+  if (!trimmed) return { ok: false };
+  const r = await fetch("/api/whoami", { headers: { "x-demo-pass": trimmed } }).catch(() => null);
+  if (!r) return { ok: false, message: "Could not reach the demo just now." };
+  if (r.status === 429) return { ok: false, message: "Too many wrong codes. Try again in a few minutes." };
+  const d = await r.json().catch(() => ({}));
+  if (!d.pass) return { ok: false, message: "That code was not recognised." };
+  PASS = trimmed;
+  remember("pass", trimmed);
+  return { ok: true, name: d.pass };
+}
 
 const loadLab = (): Lab => {
   try {
@@ -214,6 +228,9 @@ export default function Voice() {
   const [playhead, setPlayhead] = useState<{ id: number; t: number } | null>(null);
   const [draft, setDraft] = useState("");
   const [tester, setTester] = useState<string | null>(null);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeNote, setCodeNote] = useState<string | null>(null);
   const [lab, setLabState] = useState<Lab>(loadLab);
   const [runs, setRuns] = useState<Run[]>([]);
   const [echoInfo, setEchoInfo] = useState("");
@@ -953,7 +970,52 @@ export default function Voice() {
             <span className="rounded-full border border-primary px-2 py-0.5 text-[10px] tracking-[0.08em]">
               tester pass · {tester}
             </span>
-          ) : null}
+          ) : codeOpen ? (
+            <form
+              className="flex items-center gap-1.5"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const r = await useCode(code);
+                setCodeNote(r.ok ? null : r.message ?? null);
+                if (r.ok) {
+                  setTester(r.name ?? null);
+                  setCode("");
+                  setCodeOpen(false);
+                }
+              }}
+            >
+              <input
+                aria-label="Access code"
+                autoFocus
+                className="h-7 w-36 rounded-md border bg-card px-2 font-mono text-[11px] tracking-[0.08em] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                onChange={(e) => setCode(e.target.value)}
+                placeholder="CODE"
+                value={code}
+              />
+              <Button className="h-7 px-2 text-[11px]" size="sm" type="submit" variant="outline">
+                Use
+              </Button>
+              <button
+                className="text-[10px] text-muted-foreground underline-offset-2 hover:underline"
+                onClick={() => {
+                  setCodeOpen(false);
+                  setCodeNote(null);
+                }}
+                type="button"
+              >
+                cancel
+              </button>
+            </form>
+          ) : (
+            <button
+              className="rounded-full border px-2 py-0.5 text-[10px] tracking-[0.08em] hover:border-primary"
+              onClick={() => setCodeOpen(true)}
+              type="button"
+            >
+              have a code?
+            </button>
+          )}
+          {codeNote ? <span className="text-[10px] text-destructive tracking-normal">{codeNote}</span> : null}
         </span>
         <h1 className="text-balance font-semibold text-3xl leading-[1.05] tracking-tight sm:text-4xl">
           Talk to a Mac that never sends your voice anywhere

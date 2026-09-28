@@ -91,7 +91,12 @@ PASS_LIMIT = (300, 300)              # per pass holder: generous, but a leaked l
 
 # Tester passes: DEMO_PASSES="gray:<token>,friend:<token>". A pass lifts the per-address limit and the
 # daily budget for whoever holds the link. Tokens live only in the deployment's environment.
-PASSES = {tok.strip(): name.strip()
+def normalise_code(code: str) -> str:
+    """Codes are typed by people: case, spaces and hyphens should not decide whether one works."""
+    return re.sub(r"[^a-z0-9]", "", code.lower())
+
+
+PASSES = {normalise_code(tok): name.strip()
           for name, _, tok in (pair.partition(":") for pair in os.environ.get("DEMO_PASSES", "").split(","))
           if name.strip() and tok.strip()}
 
@@ -443,13 +448,31 @@ STATIC = Path(__file__).parent / "static"
 def pass_holder(request: Request) -> str | None:
     """The name behind a valid tester pass, compared in constant time so a token cannot be guessed by timing."""
     import hmac
-    offered = request.headers.get("x-demo-pass", "")
+    offered = normalise_code(request.headers.get("x-demo-pass", ""))
     if not offered:
         return None
     for token, name in PASSES.items():
         if hmac.compare_digest(offered.encode(), token.encode()):
             return name
     return None
+
+
+# Someone typing a code into the page can be someone guessing at codes. Short enough to read out loud means
+# short enough to try, so wrong guesses are counted and an address that keeps guessing is told to stop.
+CODE_TRIES = (12, 600)
+_code_tries: dict[str, deque] = defaultdict(deque)
+
+
+def count_wrong_code(request: Request) -> None:
+    ip = (request.headers.get("cf-connecting-ip") or request.headers.get("x-forwarded-for", "").split(",")[0]
+          or (request.client.host if request.client else "?")).strip()
+    tries, (limit, window) = _code_tries[ip], CODE_TRIES
+    now = time.time()
+    while tries and now - tries[0] > window:
+        tries.popleft()
+    tries.append(now)
+    if len(tries) > limit:
+        raise HTTPException(429, "Too many wrong codes. Try again in a few minutes.")
 
 
 def guard(request: Request, cost: int = 1) -> None:
@@ -593,9 +616,13 @@ async def preview(request: Request, voice: str = Query(...), engine: str = Query
 
 @app.get("/api/whoami")
 def whoami(request: Request) -> JSONResponse:
+    """Which tier this browser is on. Sending a code that is not recognised counts as a wrong guess."""
     holder = pass_holder(request)
+    if holder is None and request.headers.get("x-demo-pass"):
+        count_wrong_code(request)
     limit, window = PASS_LIMIT if holder else PER_IP
-    return JSONResponse({"pass": holder, "limit": limit, "window_seconds": window})
+    return JSONResponse({"pass": holder, "limit": limit, "window_seconds": window,
+                         "codes": bool(PASSES)})
 
 
 @app.get("/api/models")
