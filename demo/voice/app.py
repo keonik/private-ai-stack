@@ -401,12 +401,27 @@ METRIC_HISTS = {
     "voice_smart_turn_inference_seconds": (_Hist((0.01, 0.02, 0.04, 0.06, 0.08, 0.1, 0.15, 0.25, 0.5)), (),
                                            "Smart Turn model time on this app's CPU"),
 }
+METRIC_GAUGES: dict[str, tuple[dict, tuple, str]] = {
+    "voice_warm_ok": ({}, ("stage",), "1 if the last warm-up of this stage worked, 0 if it failed"),
+    "voice_warm_success_age_seconds": ({}, ("stage",), "Seconds since this stage last answered"),
+}
 METRIC_COUNTS: dict[str, tuple[dict, tuple, str]] = {
     "voice_turns_total": ({}, ("outcome", "reply", "engine", "turn", "barge"), "Turns by how they ended"),
     "voice_backchannel_total": ({}, ("verdict",), "Sounds made over the reply, by verdict"),
     "voice_smart_turn_total": ({}, ("verdict",), "Smart Turn decisions"),
     "voice_rate_limited_total": ({}, ("tier",), "Requests refused by the demo's own limits"),
+    "voice_warm_failures_total": ({}, ("stage",), "Warm-up round trips that failed"),
 }
+# Last time each stage answered. The gauge is derived from these at scrape time so it is never stale.
+_warm_last: dict[str, float] = {}
+
+
+def warm_result(stage: str, ok: bool) -> None:
+    METRIC_GAUGES["voice_warm_ok"][0][(stage,)] = 1 if ok else 0
+    if ok:
+        _warm_last[stage] = time.time()
+    else:
+        count("voice_warm_failures_total", stage)
 
 
 def count(name: str, *labels: str) -> None:
@@ -425,6 +440,11 @@ def _lbl(names, values, extra: str = "") -> str:
 
 def render_metrics() -> str:
     out = []
+    for stage, at in _warm_last.items():
+        METRIC_GAUGES["voice_warm_success_age_seconds"][0][(stage,)] = round(time.time() - at, 1)
+    for name, (series, names, help_) in METRIC_GAUGES.items():
+        out += [f"# HELP {name} {help_}", f"# TYPE {name} gauge"]
+        out += [f"{name}{_lbl(names, labels)} {v}" for labels, v in sorted(series.items())]
     for name, (series, names, help_) in METRIC_COUNTS.items():
         out += [f"# HELP {name} {help_}", f"# TYPE {name} counter"]
         out += [f"{name}{_lbl(names, labels)} {v}" for labels, v in sorted(series.items())]
@@ -544,21 +564,39 @@ async def warm_forever() -> None:
 
     async def loop() -> None:
         while True:
-            try:
-                if BASE and KEY and ENABLED:
+            if BASE and KEY and ENABLED:
+                try:
                     await refresh_catalogue()
+                except Exception:  # noqa: BLE001 — the last catalogue stands
+                    pass
+                clip = b""
+                # Each stage is reported on its own. The point is not to crash but to be *visible*: oMLX has
+                # an open bug where /v1/audio/speech starts answering 500 after hours of uptime and only a
+                # restart fixes it, and a demo that only finds out when a visitor speaks is no good.
+                try:
                     tts = CATALOGUE.engine(None)
                     r = await upstream("POST", "/audio/speech",
                                        json={"model": tts["id"], "input": "ready", "voice": tts["default"],
                                              "response_format": "wav"})
-                    await upstream("POST", "/audio/transcriptions",
-                                   files={"file": ("warm.wav", r.content, "audio/wav")},
-                                   data={"model": CATALOGUE.stt})
+                    clip = r.content
+                    warm_result("speech", True)
+                except Exception:  # noqa: BLE001
+                    warm_result("speech", False)
+                if clip:
+                    try:
+                        await upstream("POST", "/audio/transcriptions",
+                                       files={"file": ("warm.wav", clip, "audio/wav")},
+                                       data={"model": CATALOGUE.stt})
+                        warm_result("transcription", True)
+                    except Exception:  # noqa: BLE001
+                        warm_result("transcription", False)
+                try:
                     await upstream("POST", "/chat/completions",
                                    json={"model": CATALOGUE.chat_default, "max_tokens": 1,
                                          "messages": [{"role": "user", "content": "hi"}]})
-            except Exception:
-                pass  # the demo degrades to a cold start, which is not worth crashing over
+                    warm_result("answering", True)
+                except Exception:  # noqa: BLE001
+                    warm_result("answering", False)
             await asyncio.sleep(240)
 
     asyncio.create_task(refresh_catalogue())

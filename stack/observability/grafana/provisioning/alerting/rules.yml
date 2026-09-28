@@ -334,6 +334,70 @@
      "isPaused": false
     },
     {
+     "uid": "pas-voice-warm",
+     "title": "Voice demo speech path stale",
+     "condition": "C",
+     "for": "5m",
+     "labels": {
+      "severity": "critical"
+     },
+     "annotations": {
+      "summary": "The demo's {{ $labels.stage }} stage has not answered for {{ $values.A.Value | printf \"%.0f\" }} s",
+      "description": "The demo warms speech, transcription and answering every 4 minutes, so 15 minutes without one means that stage is failing for visitors too. oMLX has an open bug where /v1/audio/speech starts returning 500 after hours of uptime and only restarting oMLX fixes it \u2014 check the speech stage first, then `docker logs deployer-voice-demo`."
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "prom",
+       "model": {
+        "refId": "A",
+        "expr": "max by (stage) (voice_warm_success_age_seconds)",
+        "instant": true,
+        "intervalMs": 15000,
+        "maxDataPoints": 100
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            900
+           ]
+          },
+          "operator": {
+           "type": "and"
+          },
+          "query": {
+           "params": [
+            "A"
+           ]
+          },
+          "reducer": {
+           "type": "last"
+          },
+          "type": "query"
+         }
+        ]
+       }
+      }
+     ],
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "isPaused": false
+    },
+    {
      "uid": "pas-restarts",
      "title": "Container restarting",
      "condition": "C",

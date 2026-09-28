@@ -44,6 +44,13 @@ RULES = [
     rule("pas-rag-ingest-errors", "Document ingest errors", 'sum(increase(rag_ingested_files_total{result="error"}[10m])) or vector(0)', "gt", 0, "0s", "warning",
          "{{ $values.A.Value | printf \"%.0f\" }} files failed to index in the last 10 minutes",
          "See data/audit.jsonl ingest_error events for the filename and reason."),
+    rule("pas-voice-warm", "Voice demo speech path stale",
+         "max by (stage) (voice_warm_success_age_seconds)", "gt", 900, "5m", "critical",
+         "The demo's {{ $labels.stage }} stage has not answered for {{ $values.A.Value | printf \"%.0f\" }} s",
+         "The demo warms speech, transcription and answering every 4 minutes, so 15 minutes without one "
+         "means that stage is failing for visitors too. oMLX has an open bug where /v1/audio/speech starts "
+         "returning 500 after hours of uptime and only restarting oMLX fixes it — check the speech stage "
+         "first, then `docker logs deployer-voice-demo`."),
     rule("pas-restarts", "Container restarting", "max by (service) (clamp_min(increase(container_restarts_total[1h]), 0))", "gt", 2, "0s", "warning",
          "{{ $labels.service }} restarted {{ $values.A.Value | printf \"%.0f\" }} times in the last hour",
          "docker compose logs <service>"),
