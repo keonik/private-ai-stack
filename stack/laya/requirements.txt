@@ -1,0 +1,5 @@
+# laya-mlx pulls mlx itself; this service adds only the HTTP layer.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+laya-mlx==0.2.0
+prometheus-client==0.21.1

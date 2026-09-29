@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Typed decisions on 127.0.0.1:8099 (see laya/README.md). A daemon so it is there after a reboot without
+     anyone logging in, running as the user whose venv, model cache and key file these are. The bearer token
+     is not in this file: the service reads ~/.config/laya/api.key, because a plist is world-readable. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.private-ai-stack.laya</string>
+  <key>UserName</key><string>__USER__</string>
+  <key>GroupName</key><string>staff</string>
+  <key>ProgramArguments</key><array>
+    <string>__HOME__/.local/share/laya/venv/bin/uvicorn</string>
+    <string>app:app</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8099</string>
+  </array>
+  <key>WorkingDirectory</key><string>__STACK__/laya</string>
+  <key>EnvironmentVariables</key><dict>
+    <key>HOME</key><string>__HOME__</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>15</integer>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/private-ai-stack.laya.log</string>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/private-ai-stack.laya.log</string>
+</dict></plist>

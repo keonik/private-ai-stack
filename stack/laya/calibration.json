@@ -1,0 +1,9 @@
+{
+ "model": "convaiinnovations/laya",
+ "fitted_on": "calib-rows.jsonl",
+ "rows": 1200,
+ "temperatures": {
+  "choice:4": 0.59,
+  "choice:6": 1.545
+ }
+}
