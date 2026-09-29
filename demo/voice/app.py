@@ -54,13 +54,13 @@ CHAT_KNOWN = {
     # Median of four voice-shaped questions through the gateway, 2026-09-28. The first call to a model that
     # is not pinned pays a cold load — both of the newer ones showed an ~11 s first answer and then settled.
     "qwen3.6-35b-a3b": ("Qwen3.6 35B MoE", "best answers, ~0.5 s"),
-    "gemma4-26b-a4b": ("Gemma 4 26B MoE", "~0.7 s"),
     "qwen3.8-27b-4bit": ("Qwen3.8 27B dense", "~1.4 s"),
 }
 
-# Transcription: the first of these the engine serves. Parakeet is ~0.1 s against Whisper-turbo's 0.5 s.
-STT_PREFERENCE = ["parakeet-tdt-0.6b-v2", "parakeet-v3", "whisper-turbo", "qwen3-asr-1.7b-8bit",
-                  "qwen3-asr-0.6b-8bit"]
+# Transcription: the first of these the engine serves. Parakeet is ~0.1 s against Whisper-turbo's 0.5 s,
+# and wins short-form outright (1.74% word errors against 3.19%); the other two are here because they beat
+# it on anything long -- see the head-to-head in the benchmarks repo, stt/BLOG-NOTES.md.
+STT_PREFERENCE = ["parakeet-tdt-0.6b-v2", "whisper-turbo", "qwen3-asr-1.7b-8bit"]
 
 # A model the demo should not offer even while the engine still serves it.
 HIDDEN_MODELS = {m.strip() for m in os.environ.get("DEMO_HIDE_MODELS", "").split(",") if m.strip()}
@@ -163,11 +163,12 @@ def voice_catalogue() -> list[dict]:
 #   pocket-tts          0.20-0.32 s              0-8%              CC-BY-4.0, credit Kyutai
 #   vibevoice-realtime  0.46-0.66 s              0-7%              MIT
 #   chatterbox-turbo    0.55 s                   0%                MIT, adds an inaudible watermark
-#   qwen3-tts-0.6b      0.8-1.2 s                0-10%             Apache-2.0
 #   qwen3-tts-1.7b      0.9-1.1 s                0-7%              Apache-2.0
 #
-# Left out: Qwen3-TTS "ryan" on both sizes (97-114 words a minute and 13-15% word errors) and "dylan" on the
-# 1.7B (31%). Voxtral TTS is non-commercial; Orpheus is not served by this engine; CSM needs gated access.
+# Left out: Qwen3-TTS "ryan" (97-114 words a minute and 13-15% word errors) and "dylan" (31%). The 0.6B
+# Qwen3-TTS was dropped 2026-09-29 -- same second-a-sentence as the 1.7B for more word errors, so it only
+# padded the picker. Voxtral TTS is non-commercial; Orpheus is not served by this engine; CSM needs gated
+# access.
 def _v(id_: str, label: str, language: str, gender: str) -> dict:
     return {"id": id_, "label": label, "language": language, "gender": gender}
 
@@ -205,8 +206,6 @@ ENGINE_CATALOGUE = [
      "default": "default", "voices": [_v("default", "Default", "English", "female")]},
     {"id": "qwen3-tts-1.7b", "label": "Qwen3-TTS 1.7B", "note": "~1 s a sentence", "default": "vivian",
      "voices": [_v(*q) for q in _QWEN if q[0] != "dylan"]},
-    {"id": "qwen3-tts-0.6b", "label": "Qwen3-TTS 0.6B", "note": "~1 s a sentence", "default": "vivian",
-     "voices": [_v(*q) for q in _QWEN]},
 ]
 ENGINE_KNOWN = {e["id"]: e for e in ENGINE_CATALOGUE}
 

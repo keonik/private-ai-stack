@@ -55,13 +55,14 @@ model_list:
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   - model_name: qwen3.8-27b-coder
     litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
+  # gemma-4-26B-A4B was the quality slot -- the highest score on the 707 items and the best CAPTCHA
+  # accuracy measured here -- but nothing routed to it, so the weights were deleted 2026-09-29 (see
+  # SLOTS.md for what that gives up). The name still answers, on the default, so anything holding it
+  # gets a reply rather than a 404.
+  - model_name: gemma4-26b-a4b
+    litellm_params: { model: openai/qwen3.6-35b-a3b, api_base: os.environ/QWEN_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # Back on the engine 2026-09-20 at 6-bit (the retired build was 4-bit), to compare real-world answer
   # quality against the MoE. Dense: ~32 s to read an 8k prompt, so it is opt-in by name, never an alias.
-  # The quality slot (benchmarks repo, SLOTS.md): highest score on the 707 items and the best CAPTCHA
-  # accuracy measured, decoding at 127 t/s with its drafter. Slower per single call than the default,
-  # which is why it is opt-in rather than behind local/chat.
-  - model_name: gemma4-26b-a4b
-    litellm_params: { model: openai/gemma4-26b-a4b, api_base: os.environ/OMLX_BASE_URL, api_key: os.environ/OMLX_API_KEY }
   # Both names serve the 4-bit build: it matched the 6-bit exactly on code and math (94.4% vs 94.4%) at
   # 2.5x the decode speed, so the 6-bit was retired 2026-09-22.
   - model_name: qwen3.8-27b
