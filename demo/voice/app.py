@@ -54,7 +54,7 @@ CHAT_KNOWN = {
     # Median of four voice-shaped questions through the gateway, 2026-09-28. The first call to a model that
     # is not pinned pays a cold load — both of the newer ones showed an ~11 s first answer and then settled.
     "qwen3.6-35b-a3b": ("Qwen3.6 35B MoE", "best answers, ~0.5 s"),
-    "qwen3.8-27b-4bit": ("Qwen3.8 27B dense", "~1.4 s"),
+    "qwen3.8-27b-oq4e": ("Qwen3.8 27B dense", "~1.4 s"),
 }
 
 # Transcription: the first of these the engine serves. Parakeet is ~0.1 s against Whisper-turbo's 0.5 s,
