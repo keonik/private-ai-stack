@@ -423,7 +423,7 @@ keepalive agent then include these services, so they come back with everything e
 | docker-stats | CPU %, memory, network, restarts for **every container on the machine**, plus what the Docker VM is storing | 150 lines of stdlib Python over the Docker socket (`observability/docker-stats/exporter.py`) |
 | host-metrics | the Mac itself: disk, memory the way Activity Monitor counts it, swap, load | stdlib Python on the host under launchd, because a container sees the Linux VM and not macOS |
 | Loki + Alloy | every container's stdout/stderr, 14 days, searchable by service | Alloy discovers compose containers over the socket |
-| Grafana | the dashboards and alerts below (port 3001 is open on the LAN like the chat UI, so give `GRAFANA_PASSWORD` a real value); also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
+| Grafana | the dashboards and alerts below (port 3001 is bound to loopback like the chat UI, so reach it through the tunnel; still give `GRAFANA_PASSWORD` a real value); also reads the LiteLLM spend table straight from Postgres | provisioned from `observability/grafana/` — nothing is clicked together |
 | alert-relay | turns Grafana's alert JSON into a notification a person can read on a phone | 90 lines of stdlib Python (`observability/alert-relay/relay.py`) |
 | your own overlay | anything else on this machine — see "Monitoring something else on this machine" below | gitignored files the generators and compose pick up when present |
 
